@@ -54,10 +54,8 @@ Tested targets and initiators:
  o iPXE/USB with Intel DN2800MT. (old test at blog: http://shell.peach.ne.jp/aoyama/archives/2100)
 
 Tested OS versions:
- o FreeBSD 7.1-7.3 (no longer supported)
- o FreeBSD 8.0-8.4 (no longer supported)
- o FreeBSD 9.0-9.3
- o FreeBSD 10.0-10.2
+ o FreeBSD 12.2
+ o FreeBSD 13.0
 
 For more information, go to Japanese blog at:
 http://shell.peach.ne.jp/aoyama/
