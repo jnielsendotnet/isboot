@@ -68,13 +68,8 @@ __FBSDID("$FreeBSD$");
 
 /* iscsi_initiator related */
 #ifdef USE_SYSTEM_ISCSI_HEADER
-#if __FreeBSD_version >= 1000050
 #include <dev/iscsi_initiator/iscsi.h>
 #include <dev/iscsi_initiator/iscsivar.h>
-#else
-#include <dev/iscsi/initiator/iscsi.h>
-#include <dev/iscsi/initiator/iscsivar.h>
-#endif
 /* XXX this includes define of CmdSN, ExpStSN, MaxCmdSN */
 #undef CmdSN
 #undef ExpStSN
@@ -1071,29 +1066,23 @@ isboot_append_param(pdu_t *pp, char *format, ...)
 }
 
 
-#if __FreeBSD_version >= 1100000
+// changed in r324446
+#if __FreeBSD_version >= 1200051
 static void
-isboot_free_mbufext(struct mbuf *m, void *p, void *optarg)
-#elif __FreeBSD_version >= 1000050 && __FreeBSD_version < 1100000
-static int
-isboot_free_mbufext(struct mbuf *m, void *p, void *optarg)
+isboot_free_mbufext(struct mbuf *m)
 #else
 static void
-isboot_free_mbufext(void *p, void *optarg)
+isboot_free_mbufext(struct mbuf *m, void *p, void *optarg)
 #endif
 {
+#if __FreeBSD_version >= 1200051
+	void *p = m->m_ext.ext_buf;
+#endif
 
 	ISBOOT_TRACE("isboot_free_mbufext\n");
 	if (p == NULL)
-#if __FreeBSD_version >= 1000050 && __FreeBSD_version < 1100000
-		return (EXT_FREE_OK);
-#else
 		return;
-#endif
 	isboot_free_mext(p);
-#if __FreeBSD_version >= 1000050 && __FreeBSD_version < 1100000
-	return (EXT_FREE_OK);
-#endif
 }
 
 static int
@@ -1142,15 +1131,9 @@ isboot_xmit_pdu(struct isboot_sess *sess, pdu_t *pp)
 		MGET(md, M_NOWAIT, MT_DATA);
 		if (mh == NULL)
 			panic("no mbuf memory");
-#if __FreeBSD_version >= 800016
 		MEXTADD(md, (caddr_t)ds_dd, (ISCSI_ALIGN(pp->ds_len)
 			+ sizeof(pp->ds_dig)),
 		    isboot_free_mbufext, ds_dd, NULL, 0, EXT_MOD_TYPE);
-#else
-		MEXTADD(md, (caddr_t)ds_dd, (ISCSI_ALIGN(pp->ds_len)
-			+ sizeof(pp->ds_dig)),
-		    isboot_free_mbufext, NULL, 0, EXT_MOD_TYPE);
-#endif
 		memcpy(md->m_data, pp->ds_addr, pp->ds_len);
 		md->m_len = pp->ds_len;
 		if ((ISCSI_ALIGN(pp->ds_len) - pp->ds_len) != 0) {
@@ -1174,14 +1157,6 @@ isboot_xmit_pdu(struct isboot_sess *sess, pdu_t *pp)
 	bhs = (uint8_t *)mh->m_data;
 	DSET8(&bhs[4], ISCSI_ALIGN(pp->ahs_len) / 4);
 	DSET24(&bhs[5], pp->ds_len);
-
-#if 0
-	ISBOOT_TRACE("send %d + %d\n", ISCSI_BHS_LEN, pp->ds_len);
-	ISBOOT_TRACEDUMP("MBUF MH", mh->m_data, mh->m_len);
-	if (pp->ds_len != 0) {
-		ISBOOT_TRACEDUMP("MBUF MD", md->m_data, md->m_len);
-	}
-#endif
 
 	/* send mbuf chain */
 	if (sess->so == NULL) {
@@ -1208,9 +1183,6 @@ isboot_recv_pdu(struct isboot_sess *sess, pdu_t *pp)
 	int error;
 	int flags;
 	int ahs_len, ds_len;
-#if 0
-	int recv_len;
-#endif
 
 	memset(&uio, 0, sizeof(uio));
 	total = 0;
@@ -1298,7 +1270,6 @@ isboot_recv_pdu(struct isboot_sess *sess, pdu_t *pp)
 
 	/* DATA */
 	if (ds_len != 0) {
-#if 1
 		flags = MSG_WAITALL;
 		uio.uio_resid = ISCSI_ALIGN(ds_len);
 		error = soreceive(sess->so, NULL, &uio, &mp, NULL, &flags);
@@ -1315,30 +1286,6 @@ isboot_recv_pdu(struct isboot_sess *sess, pdu_t *pp)
 		m_freem(mp);
 		pp->ds_len = ds_len;
 		total += ISCSI_ALIGN(ds_len);
-#else
-		flags = MSG_DONTWAIT;
-		uio.uio_resid = ISCSI_ALIGN(ds_len);
-		pp->ds_len = 0;
-		do {
-			error = soreceive(sess->so, NULL, &uio, &mp, NULL, &flags);
-			if (error == EAGAIN) {
-#if __FreeBSD_version >= 800000
-				maybe_yield();
-#endif
-				continue;
-			}
-			if (error) {
-				ISBOOT_ERROR("soreceive DATA error %d\n", error);
-				return (error);
-			}
-			recv_len = ISCSI_ALIGN(ds_len) - pp->ds_len - uio.uio_resid;
-			m_copydata(mp, 0, recv_len,
-			    (caddr_t)pp->ds_addr + pp->ds_len);
-			m_freem(mp);
-			pp->ds_len += recv_len;
-			total += recv_len;
-		} while (uio.uio_resid != 0);
-#endif
 	}
 
 	/* DD */
@@ -1390,9 +1337,6 @@ isboot_recv_pdu(struct isboot_sess *sess, pdu_t *pp)
 		}
 	}
 
-#if 0
-	ISBOOT_TRACE("recv %d + %d\n", ISCSI_BHS_LEN, total - ISCSI_BHS_LEN);
-#endif
 	return (0);
 }
 
@@ -1596,11 +1540,6 @@ isboot_get_chap_response(struct isboot_sess *sess)
 	/* response */
 	MD5Final(sess->auth.chap_response, &md5ctx);
 	sess->auth.chap_response_len = MD5_DIGEST_LENGTH;
-
-#if 0
-	ISBOOT_TRACEDUMP("CHAP RES:", sess->auth.chap_response,
-	    sess->auth.chap_response_len);
-#endif
 
 	/* convert to string */
 	isboot_bin2hex(sess->auth.chap_response_string,
@@ -1935,10 +1874,6 @@ next_loginpdu:
 		return (EOPNOTSUPP);
 	}
 
-#if 0
-	ISBOOT_TRACEDUMP("XPDU:", (uint8_t *)&pp->ipdu.bhs, sizeof(pp->ipdu.bhs));
-	ISBOOT_TRACEDUMP("XPDU:", (uint8_t *)pp->ds_addr, pp->ds_len);
-#endif
 	ISBOOT_TRACE("xmit PDU\n");
 	error = isboot_xmit_pdu(sess, pp);
 	if (error) {
@@ -1947,10 +1882,6 @@ next_loginpdu:
 	}
 	ISBOOT_TRACE("recv PDU\n");
 	error = isboot_recv_pdu(sess, pp);
-#if 0
-	ISBOOT_TRACEDUMP("RPDU:", (uint8_t *)&pp->ipdu.bhs, sizeof(pp->ipdu.bhs));
-	ISBOOT_TRACEDUMP("RPDU:", (uint8_t *)pp->ds_addr, pp->ds_len);
-#endif
 	if (error) {
 		isboot_free_pdu(pp);
 		return (error);
@@ -1991,14 +1922,6 @@ next_loginpdu:
 		}
 		goto next_loginpdu;
 	}
-#if 0
-	ISBOOT_TRACE("set iscopt\n");
-	error = isboot_set_iscopt(sess);
-	if (error) {
-		ISBOOT_ERROR("set isc options\n");
-		return (error);
-	}
-#endif
 	/* now full feature phase */
 	if (sess->full_feature != 0) {
 		sess->header_digest = 0;
@@ -2078,13 +2001,6 @@ isboot_cam_set_devices(struct isboot_sess *sess)
 			ISBOOT_TRACE("XPT error\n");
 		} else {
 			n++;
-#if 0
-			ISBOOT_TRACE("%d/%d/%d tagged openings now %d\n",
-			    ccb.ccb_h.path_id,
-			    ccb.ccb_h.target_id,
-			    ccb.ccb_h.target_lun,
-			    ccb.crs.openings);
-#endif
 		}
 		xpt_free_path(path);
 	}
@@ -2137,9 +2053,6 @@ isboot_scsi_io(struct cam_sim *sim, union ccb *ccb)
 	LUN = isboot_lun2islun(ccb_h->target_lun, ISBOOT_MAX_LUNS);
 	DSET64(&req[8], LUN);
 
-#if 0
-	ISBOOT_TRACE("isboot scsi io CDB=%d\n", csio->cdb_len);
-#endif
 	pdu.ahs_size = 0;
 	pdu.ahs_len = 0;
 	pdu.ahs_addr = NULL;
@@ -2226,9 +2139,6 @@ isboot_scsi_io(struct cam_sim *sim, union ccb *ccb)
 	taskp->ccb = ccb;
 	sess->cmdsn++;
 	mtx_unlock_spin(&sess->sn_mtx);
-#if 0
-	ISBOOT_TRACE("new ITT=%x\n", ITT);
-#endif
 
 	if (csio->dxfer_len != 0) {
 		if (csio->dxfer_len <= sess->opt.maxXmitDataSegmentLength)
@@ -2266,11 +2176,6 @@ isboot_scsi_io(struct cam_sim *sim, union ccb *ccb)
 		csio->resid = csio->dxfer_len;
 	}
 
-#if 0
-	ISBOOT_TRACEDUMP("XPDU:", (uint8_t *)&pdu.ipdu.bhs, sizeof(pdu.ipdu.bhs));
-	ISBOOT_TRACEDUMP("XPDU:", (uint8_t *)pdu.ds_addr, pdu.ds_len);
-	ISBOOT_TRACE("xmit PDU\n");
-#endif
 	error = isboot_xmit_pdu(sess, &pdu);
 	if (error) {
 		mtx_lock(&sess->cam_mtx);
@@ -2284,9 +2189,6 @@ isboot_scsi_io(struct cam_sim *sim, union ccb *ccb)
 		isboot_free_pdu(&pdu);
 		return (error);
 	}
-#if 0
-	ISBOOT_TRACE("free PDU\n");
-#endif
 	isboot_free_pdu(&pdu);
 	mtx_lock(&sess->cam_mtx);
 	return (0);
@@ -2309,13 +2211,6 @@ isboot_action(struct cam_sim *sim, union ccb *ccb)
 				break;
 			}
 		}
-#if 0
-		if (ccb->csio.cdb_len > 16) {
-			ccb->ccb_h.status = CAM_REQ_INVALID;
-			break;
-		}
-		/* now accept CDB > 16 (Extended CDB) */
-#endif
 		isboot_scsi_io(sim, ccb);
 		return;
 	}
@@ -2341,9 +2236,6 @@ isboot_action(struct cam_sim *sim, union ccb *ccb)
 		cpi->hba_eng_cnt = 0;
 		cpi->max_target = 0;
 		cpi->max_lun = ISBOOT_MAX_LUNS;
-#if 0
-		cpi->hpath_id = xxx;
-#endif
 		cpi->initiator_id = cpi->max_lun + 1;
 		strncpy(cpi->sim_vid, "FreeBSD", SIM_IDLEN);
 		strncpy(cpi->hba_vid, "iSCSI", HBA_IDLEN);
@@ -2357,15 +2249,9 @@ isboot_action(struct cam_sim *sim, union ccb *ccb)
 #else
 		cpi->protocol_version = SCSI_REV_SPC2;
 #endif
-#if __FreeBSD_version >= 800000
 		cpi->transport = XPORT_ISCSI;
-#else
-		cpi->transport = XPORT_SAS;
-#endif
 		cpi->transport_version = 0;
-#if __FreeBSD_version >= 800000
 		cpi->maxio = 1024 * 1024;
-#endif
 		cpi->ccb_h.status = CAM_REQ_CMP;
 		break;
 	}
@@ -2377,20 +2263,8 @@ isboot_action(struct cam_sim *sim, union ccb *ccb)
 #else
 		ccb->cts.protocol_version = SCSI_REV_SPC2;
 #endif
-#if __FreeBSD_version >= 800000
 		ccb->cts.transport = XPORT_ISCSI;
-#else
-		ccb->cts.transport = XPORT_SAS;
-#endif
 		ccb->cts.transport_version = 0;
-#if 0
-		{
-			struct ccb_trans_settings_sas *sas =
-				&ccb->cts.xport_specific.sas;
-			sas->valid &= ~CTS_SAS_VALID_SPEED;
-			sas->bitrate = 300000;
-		}
-#endif
 		ccb->ccb_h.status = CAM_REQ_CMP;
 		break;
 	}
@@ -2526,10 +2400,8 @@ isboot_cam_rescan(struct isboot_sess *sess)
 	ccb = xpt_alloc_ccb();
 	mtx_lock(&sess->cam_mtx);
 	if (sess->sim != NULL && sess->path != NULL) {
-#if __FreeBSD_version >= 1001000
 		//xpt_path_lock(ccb->ccb_h.path);
 		xpt_path_lock(sess->path);
-#endif
 		xpt_setup_ccb(&ccb->ccb_h, sess->path, /*priority*/5);
 		ccb->ccb_h.func_code = XPT_SCAN_BUS;
 		ccb->ccb_h.target_id = CAM_TARGET_WILDCARD;
@@ -2540,20 +2412,9 @@ isboot_cam_rescan(struct isboot_sess *sess)
 		sess->cam_rescan_done = 0;
 		sess->cam_rescan_in_progress = 1;
 		xpt_action(ccb);
-#if __FreeBSD_version >= 1001000
 		//xpt_path_unlock(ccb->ccb_h.path);
 		xpt_path_unlock(sess->path);
-#endif
 		ccb = NULL;	/* free by callback */
-#if 0
-		while (sess->cam_rescan_done == 0) {
-			if (isboot_stop_flag != 0)
-				break;
-			msleep(&sess->cam_rescan_done, &sess->cam_mtx, PRIBIO,
-			    "rescan", 0);
-		}
-		sess->cam_rescan_in_progress = 0;
-#endif
 	}
 	mtx_unlock(&sess->cam_mtx);
 	if (ccb != NULL)
@@ -2648,10 +2509,6 @@ isboot_initialize_session(struct isboot_sess *sess)
 	int error = 0;
 
 	ISBOOT_TRACE("initialize session, thread id=%x\n", curthread->td_tid);
-#if 0
-	/* clear by caller */
-	memset(sess, 0, sizeof(*sess));
-#endif
 	sess->td = curthread;
 	strlcpy(sess->initiator_name, (char *)isboot_initiator_name,
 	    ISBOOT_NAME_MAX);
@@ -2745,12 +2602,6 @@ isboot_initialize_session(struct isboot_sess *sess)
 	sess->opt.dataSequenceInOrder = TRUE;
 	/* default MaxRecvDataSegmentLength 12.12 */
 	sess->opt.maxXmitDataSegmentLength = 8192;
-#if 0
-	/* MS initiator values */
-	sess->opt.maxRecvDataSegmentLength = 65536;
-	sess->opt.firstBurstLength = 65536;
-	sess->opt.maxBurstLength = 262144;
-#endif
 	/* istgt 20100525 default values */
 	sess->opt.maxRecvDataSegmentLength = 262144;
 	sess->opt.firstBurstLength = 262144;
@@ -2886,12 +2737,6 @@ isboot_rsp_scsi(struct isboot_sess *sess, pdu_t *pp)
 	ISBOOT_TRACE("o=%d, u=%d, O=%d, U=%d\n", o_bit, u_bit, O_bit, U_bit);
 
 	ccb->csio.resid = 0;
-#if 0
-	if (o_bit)
-		ccb->csio.resid = -bidi_residual;
-	if (u_bit)
-		ccb->csio.resid = bidi_residual;
-#endif
 	if (O_bit)
 		ccb->csio.resid = -residual;
 	if (U_bit)
@@ -3517,12 +3362,6 @@ isboot_mainloop(void *arg)
 			memset(&pdu, 0, sizeof(pdu));
 			ISBOOT_TRACE("recv PDU\n");
 			error = isboot_recv_pdu(sess, &pdu);
-#if 0
-			ISBOOT_TRACEDUMP("RPDU:", (uint8_t *)&pdu.ipdu.bhs,
-			    sizeof(pdu.ipdu.bhs));
-			ISBOOT_TRACEDUMP("RPDU:", (uint8_t *)pdu.ds_addr,
-			    pdu.ds_len);
-#endif
 			if (error) {
 				isboot_free_pdu(&pdu);
 				ISBOOT_ERROR("recv error!?\n");
@@ -3659,11 +3498,7 @@ isboot_iscsi(void *arg)
 
 	isboot_iscsi_running = 1;
 	ISBOOT_TRACE("isboot iscsi start, thread id=%x\n", curthread->td_tid);
-#if __FreeBSD_version >= 900500
 	error = sys_setsid(curthread, NULL);
-#else
-	error = setsid(curthread, NULL);
-#endif
 	if (error) {
 		ISBOOT_ERROR("setsid error (%d)\n", error);
 	}
@@ -3676,11 +3511,7 @@ isboot_iscsi(void *arg)
 
 	ISBOOT_TRACE("isboot iscsi end, thread id=%x\n", curthread->td_tid);
 	isboot_iscsi_running = 0;
-#if __FreeBSD_version >= 800002
 	kproc_exit(0);
-#else
-	kthread_exit(0);
-#endif
 }
 
 static void

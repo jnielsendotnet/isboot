@@ -50,7 +50,7 @@ The following is an example with FreeBSD 10.0 and iPXE.
     pass1: 300.000MB/s transfers
 
 Tested targets and initiators:
- o istgt-20121123 (NAS4Free bundled version: http://www.nas4free.org/)
+ o istgt-20121123 (XigmaNAS bundled version: https://www.xigmanas.com/)
  o iPXE/USB with Intel DN2800MT. (old test at blog: http://shell.peach.ne.jp/aoyama/archives/2100)
 
 Tested OS versions:
@@ -62,5 +62,6 @@ Tested OS versions:
 For more information, go to Japanese blog at:
 http://shell.peach.ne.jp/aoyama/
 
-Author:
+Authors:
 Daisuke Aoyama <aoyama@peach.ne.jp>
+Michael Zoon <zoon01@xigmanas.com>

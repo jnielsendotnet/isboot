@@ -47,10 +47,11 @@ __FBSDID("$FreeBSD$");
 #include <netinet/in_var.h>
 #include <netinet6/nd6.h>
 #include <net/route.h>
+#include <net/route/route_ctl.h>
 #include "ibft.h"
 #include "isboot.h"
 
-static char *isboot_driver_version = "0.2.13";
+static char *isboot_driver_version = "0.2.14+k";
 
 /* boot iSCSI initiator and target */
 uint8_t isboot_initiator_name[ISBOOT_NAME_MAX];
@@ -164,12 +165,8 @@ isboot_get_ifa_by_mac(uint8_t *lladdr)
 		return (NULL);
 
 	IFNET_RLOCK();
-#if __FreeBSD_version >= 800500
-	TAILQ_FOREACH(ifp, &V_ifnet, if_link)
-#else
-	TAILQ_FOREACH(ifp, &ifnet, if_link)
-#endif
-		TAILQ_FOREACH(ifa, &ifp->if_addrhead, ifa_link) {
+	CK_STAILQ_FOREACH(ifp, &V_ifnet, if_link)
+		CK_STAILQ_FOREACH(ifa, &ifp->if_addrhead, ifa_link) {
 			if (ifa->ifa_addr->sa_family != AF_LINK)
 				continue;
 			if (memcmp(lladdr,
@@ -330,6 +327,9 @@ isboot_set_v4gw(struct sockaddr_in *gateway)
 {
 	struct sockaddr_in dst;
 	struct sockaddr_in netmask;
+	struct rt_addrinfo info;
+	struct rib_cmd_info rc;
+
 	int error;
 
 	if (gateway->sin_family != AF_INET)
@@ -347,9 +347,12 @@ isboot_set_v4gw(struct sockaddr_in *gateway)
 	netmask.sin_addr.s_addr = htonl(0);
 
 	/* delete gateway if exists */
-	error = rtrequest(RTM_DELETE, (struct sockaddr *)&dst,
-	    (struct sockaddr *)gateway, (struct sockaddr *)&netmask,
-	    0, NULL);
+	bzero((caddr_t)&info, sizeof(info));
+	info.rti_flags = 0;
+	info.rti_info[RTAX_DST] = (struct sockaddr *)&dst;
+	info.rti_info[RTAX_NETMASK] = (struct sockaddr *)&netmask;
+	info.rti_info[RTAX_GATEWAY] = (struct sockaddr *)gateway;
+	error = rib_action(RT_DEFAULT_FIB, RTM_DELETE, &info, &rc);
 	if (error) {
 		if (error != ESRCH) {
 			printf("rtrequest RTM_DELETE error %d\n",
@@ -359,9 +362,12 @@ isboot_set_v4gw(struct sockaddr_in *gateway)
 	}
 
 	/* set new default gateway */
-	error = rtrequest(RTM_ADD, (struct sockaddr *)&dst,
-	    (struct sockaddr *)gateway, (struct sockaddr *)&netmask,
-	    RTF_GATEWAY | RTF_STATIC, NULL);
+	bzero((caddr_t)&info, sizeof(info));
+	info.rti_flags = RTF_GATEWAY | RTF_STATIC;
+	info.rti_info[RTAX_DST] = (struct sockaddr *)&dst;
+	info.rti_info[RTAX_NETMASK] = (struct sockaddr *)&netmask;
+	info.rti_info[RTAX_GATEWAY] = (struct sockaddr *)gateway;
+	error = rib_action(RT_DEFAULT_FIB, RTM_ADD, &info, &rc);
 	if (error) {
 		printf("rtrequest RTM_ADD error %d\n", error);
 		return (error);
@@ -374,6 +380,8 @@ isboot_set_v6gw(struct sockaddr_in6 *gateway)
 {
 	struct sockaddr_in6 dst;
 	struct sockaddr_in6 netmask;
+	struct rt_addrinfo info;
+	struct rib_cmd_info rc;
 	int error;
 
 	if (gateway->sin6_family != AF_INET6)
@@ -391,9 +399,12 @@ isboot_set_v6gw(struct sockaddr_in6 *gateway)
 	memset(&netmask.sin6_addr, 0, 16);
 
 	/* delete gateway if exists */
-	error = rtrequest(RTM_DELETE, (struct sockaddr *)&dst,
-	    (struct sockaddr *)gateway, (struct sockaddr *)&netmask,
-	    0, NULL);
+	bzero((caddr_t)&info, sizeof(info));
+	info.rti_flags = 0;
+	info.rti_info[RTAX_DST] = (struct sockaddr *)&dst;
+	info.rti_info[RTAX_NETMASK] = (struct sockaddr *)&netmask;
+	info.rti_info[RTAX_GATEWAY] = (struct sockaddr *)gateway;
+	error = rib_action(RT_DEFAULT_FIB, RTM_DELETE, &info, &rc);
 	if (error) {
 		if (error != ESRCH) {
 			printf("rtrequest RTM_DELETE error %d\n",
@@ -403,9 +414,12 @@ isboot_set_v6gw(struct sockaddr_in6 *gateway)
 	}
 
 	/* set new default gateway */
-	error = rtrequest(RTM_ADD, (struct sockaddr *)&dst,
-	    (struct sockaddr *)gateway, (struct sockaddr *)&netmask,
-	    RTF_GATEWAY | RTF_STATIC, NULL);
+	bzero((caddr_t)&info, sizeof(info));
+	info.rti_flags = RTF_GATEWAY | RTF_STATIC;
+	info.rti_info[RTAX_DST] = (struct sockaddr *)&dst;
+	info.rti_info[RTAX_NETMASK] = (struct sockaddr *)&netmask;
+	info.rti_info[RTAX_GATEWAY] = (struct sockaddr *)gateway;
+	error = rib_action(RT_DEFAULT_FIB, RTM_ADD, &info, &rc);
 	if (error) {
 		printf("rtrequest RTM_ADD error %d\n", error);
 		return (error);
@@ -649,9 +663,6 @@ isboot_handler(module_t mod, int what, void *arg)
 				err = isboot_iscsi_start();
 				if (err) {
 					printf("can't start iSCSI session\n");
-#if 0
-					return (err);
-#endif
 				}
 			}
 		}
@@ -706,9 +717,6 @@ static moduledata_t mod_data = {
 
 MODULE_VERSION(isboot, 1);
 MODULE_DEPEND(isboot, ether, 1, 1, 1);
-#if 0
-/* does not work */
-MODULE_DEPEND(isboot, iscsi, 1, 1, 1);
-#endif
+MODULE_DEPEND(isboot, icl, 1, 1, 1);
 MODULE_DEPEND(isboot, cam, 1, 1, 1);
 DECLARE_MODULE(isboot, mod_data, SI_SUB_PROTO_END, SI_ORDER_ANY);
