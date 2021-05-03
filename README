@@ -1,0 +1,66 @@
+The iSCSI boot driver for FreeBSD
+
+This driver provides iSCSI boot feature to FreeBSD.
+It can be used with the bootable initiator such as the Intel NICs and iPXE/gPXE.
+It connects with the iSCSI target specified by iBFT automatically.
+Therefore, a diskless machine is also simply possible.
+
+Installation:
+
+1. extract the archive:
+    # tar zxvf isboot-x.x.x.tar.gz
+
+2. compile the module:
+    # cd isboot-x.x.x/src
+    # make
+
+3. install the compiled module to the kernel directory:
+    # make install
+
+4. edit /boot/loader.conf, and add the following line:
+    isboot_load="YES"
+
+Note:
+If you want use isboot with VIMAGE kernel, add CFLAGS+= -DVIMAGE to Makefile.
+The boot device may change after installation.
+It may be necessary to edit /etc/fstab in single mode.
+IP address and gateway are reflected in the boot device.
+You can see the boot device information by sysctl(8).
+
+The following is an example with FreeBSD 10.0 and iPXE.
+
+    # sysctl net.isboot
+    net.isboot.version: 0.2.7
+    net.isboot.nic: em0
+    net.isboot.device: da1
+
+    # sysctl hw.ibft
+    hw.ibft.initiator_name: iqn.2010-04.org.ipxe:dn2800mt
+    hw.ibft.initiator_address: 172.18.0.139
+    hw.ibft.target_name: iqn.2007-09.jp.ne.peach:aria:dn2800mt-boot
+    hw.ibft.target_address: 172.18.0.26
+    hw.ibft.target_port: 3260
+    hw.ibft.target_lun: 0
+    hw.ibft.nic_prefix: 16
+    hw.ibft.nic_gateway: 172.18.0.1
+
+    # camcontrol inquiry da1
+    pass1: <FreeBSD iSCSI DISK 0001> Fixed Direct Access SCSI-5 device
+    pass1: Serial Number 10002800
+    pass1: 300.000MB/s transfers
+
+Tested targets and initiators:
+ o istgt-20121123 (NAS4Free bundled version: http://www.nas4free.org/)
+ o iPXE/USB with Intel DN2800MT. (old test at blog: http://shell.peach.ne.jp/aoyama/archives/2100)
+
+Tested OS versions:
+ o FreeBSD 7.1-7.3 (no longer supported)
+ o FreeBSD 8.0-8.4 (no longer supported)
+ o FreeBSD 9.0-9.3
+ o FreeBSD 10.0-10.2
+
+For more information, go to Japanese blog at:
+http://shell.peach.ne.jp/aoyama/
+
+Author:
+Daisuke Aoyama <aoyama@peach.ne.jp>
