@@ -460,24 +460,30 @@ isboot_set_v6gw(struct sockaddr_in6 *gateway)
 static int
 isboot_ifup(struct ifnet *ifp)
 {
+	struct socket *so;
 	struct ifreq ifr;
 	struct thread *td;
 	int error;
 
 	memset(&ifr, 0, sizeof(ifr));
 	td = curthread;
+	error = socreate(AF_INET, &so, SOCK_DGRAM, 0, td->td_ucred, td);
+	if (error) {
+		printf("%s: socreate, error=%d\n", __func__, error);
+		return (error);
+	}
 
 	/* boot NIC */
 	strlcpy(ifr.ifr_name, ifp->if_xname, sizeof(ifr.ifr_name));
 
 	/* set IFF_UP */
-	error = ifioctl(NULL, SIOCGIFFLAGS, (caddr_t)&ifr, td);
+	error = ifioctl(so, SIOCGIFFLAGS, (caddr_t)&ifr, td);
 	if (error) {
 		printf("ifioctl SIOCGIFFLAGS\n");
 		return (error);
 	}
 	ifr.ifr_flags |= IFF_UP;
-	error = ifioctl(NULL, SIOCSIFFLAGS, (caddr_t)&ifr, td);
+	error = ifioctl(so, SIOCSIFFLAGS, (caddr_t)&ifr, td);
 	if (error) {
 		printf("ifioctl SIOCSIFFLAGS\n");
 		return (error);
