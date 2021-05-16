@@ -525,8 +525,10 @@ ibft_search_signature(uint8_t *addr, size_t size)
 	/* The method is 3.3 of specification */
 	for (n = IBFT_LOW_ADDR; (n + IBFT_ALIGN) <= IBFT_HIGH_ADDR
 		     && (n + IBFT_ALIGN) <= size; n += IBFT_ALIGN) {
-		if (memcmp(addr + n, IBFT_SIGNATURE,
-			IBFT_SIGNATURE_LENGTH) == 0) {
+		if ((memcmp(addr + n, IBFT_SIGNATURE,
+			IBFT_SIGNATURE_LENGTH) == 0) ||
+		    (memcmp(addr + n, IBFT_SIGNATURE_ALT,
+			IBFT_SIGNATURE_LENGTH) == 0)) {
 			return (addr + n);
 		}
 	}
@@ -559,6 +561,11 @@ ibft_init(void)
 			return (error);
 		}
 		ibft_signature = p;
+	}
+	else {
+		if (ibft_verbose) {
+			printf("iBFT not found\n");
+		}
 	}
 	return (0);
 }

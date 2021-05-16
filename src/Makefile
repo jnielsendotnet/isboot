@@ -4,9 +4,13 @@ KMOD=	isboot
 SRCS=	isboot.c ibft.c iscsi.c
 SRCS+=	isboot.h ibft.h iscsi_compat.h
 SRCS+=	opt_cam.h device_if.h bus_if.h
+
+# For kernel with options VIMAGE
 #CFLAGS+= -DVIMAGE
-CFLAGS+= -DIBFT_VERBOSE
-#CFLAGS+= -DDEBUG
+
+# Extra debug output
+#CFLAGS+= -DDEBUG -DMODDEBUG -DIBFT_VERBOSE
+
 #CFLAGS+= -DISBOOT_OPT_PREFERRED_HEADER_DIGEST
 #CFLAGS+= -DISBOOT_OPT_PREFERRED_DATA_DIGEST
 

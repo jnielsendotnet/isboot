@@ -1987,7 +1987,7 @@ isboot_cam_set_devices(struct isboot_sess *sess)
 			ISBOOT_TRACE("found device=%s%d@lun=%d\n",
 			    ccb.cgdl.periph_name,
 			    ccb.cgdl.unit_number,
-			    ccb.ccb_h.target_lun);
+			    (int)ccb.ccb_h.target_lun);
 		}
 
 		memset(&ccb, 0, sizeof(ccb));
@@ -2223,7 +2223,7 @@ isboot_action(struct cam_sim *sim, union ccb *ccb)
 
 		ISBOOT_TRACE("XPT_CALC_GEOMETRY\n");
 		ISBOOT_TRACE("target=%d, lun=%d vsize=%d, bsize=%d\n",
-		    ccb->ccb_h.target_id, ccb->ccb_h.target_lun,
+		    ccb->ccb_h.target_id, (int)ccb->ccb_h.target_lun,
 		    (int)ccg->volume_size, (int)ccg->block_size);
 		cam_calc_geometry(ccg, /*extended*/1);
 		break;
