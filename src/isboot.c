@@ -167,8 +167,13 @@ isboot_get_ifa_by_mac(uint8_t *lladdr)
 		return (NULL);
 
 	IFNET_RLOCK();
+#if __FreeBSD_version >= 1200000
 	CK_STAILQ_FOREACH(ifp, &V_ifnet, if_link)
 		CK_STAILQ_FOREACH(ifa, &ifp->if_addrhead, ifa_link) {
+#else
+	TAILQ_FOREACH(ifp, &V_ifnet, if_link)
+		TAILQ_FOREACH(ifa, &ifp->if_addrhead, ifa_link) {
+#endif
 			if (ifa->ifa_addr->sa_family != AF_LINK)
 				continue;
 			if (memcmp(lladdr,
