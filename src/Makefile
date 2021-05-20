@@ -3,7 +3,7 @@
 KMOD=	isboot
 SRCS=	isboot.c ibft.c iscsi.c
 SRCS+=	isboot.h ibft.h iscsi_compat.h
-SRCS+=	opt_cam.h device_if.h bus_if.h
+SRCS+=	opt_cam.h device_if.h bus_if.h opt_acpi.h
 
 # For kernel with options VIMAGE
 #CFLAGS+= -DVIMAGE

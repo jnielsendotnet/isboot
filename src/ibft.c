@@ -37,6 +37,8 @@ __FBSDID("$FreeBSD$");
 #include <vm/vm.h>
 #include <vm/pmap.h>
 #include <machine/vmparam.h>
+#include <contrib/dev/acpica/include/acpi.h>
+#include "opt_acpi.h"
 #include "ibft.h"
 
 /* location of iBFT */
@@ -527,7 +529,7 @@ ibft_search_signature(uint8_t *addr, size_t size)
 		     && (n + IBFT_ALIGN) <= size; n += IBFT_ALIGN) {
 		if ((memcmp(addr + n, IBFT_SIGNATURE,
 			IBFT_SIGNATURE_LENGTH) == 0) ||
-		    (memcmp(addr + n, IBFT_SIGNATURE_ALT,
+		    (memcmp(addr + n, ACPI_SIG_IBFT,
 			IBFT_SIGNATURE_LENGTH) == 0)) {
 			return (addr + n);
 		}
@@ -535,37 +537,67 @@ ibft_search_signature(uint8_t *addr, size_t size)
 	return (NULL);
 }
 
+/* Look up ACPI IBFT table */
+static uint8_t *
+ibft_acpi_lookup(void)
+{
+	ACPI_TABLE_IBFT *ibft;
+	/*ACPI_IBFT_HEADER *ibft_hdr, *end;*/
+	ACPI_STATUS status;
+
+	status = AcpiGetTable(ACPI_SIG_IBFT, 1, (ACPI_TABLE_HEADER **)&ibft);
+	if (ACPI_FAILURE(status)) {
+		status = AcpiGetTable(IBFT_SIGNATURE, 1, (ACPI_TABLE_HEADER **)&ibft);
+		if (ACPI_FAILURE(status))
+			return (NULL);
+	}
+	return (uint8_t *)ibft;
+}
+
 int
 ibft_init(void)
 {
+	int error, need_unmap;
 	uint8_t *vaddr, *p;
 	uint32_t paddr;
-	int error;
-
-	/* search signature */
-	vaddr = pmap_mapdev((vm_paddr_t)0, (vm_size_t)IBFT_HIGH_ADDR);
-	p = ibft_search_signature(vaddr, IBFT_HIGH_ADDR);
+	p = ibft_acpi_lookup();
 	if (p != NULL) {
-		paddr = (uint32_t)(uintptr_t)(p - vaddr);
 		if (ibft_verbose) {
-			printf("found iBFT at 0x%x\n", paddr);
+			printf("found iBFT via ACPI\n");
 		}
+		need_unmap = 0;
+	}
+	else {
+		/* search signature */
+		vaddr = pmap_mapdev((vm_paddr_t)0, (vm_size_t)IBFT_HIGH_ADDR);
+		need_unmap = 1;
+		p = ibft_search_signature(vaddr, IBFT_HIGH_ADDR);
+		if (p != NULL) {
+			paddr = (uint32_t)(uintptr_t)(p - vaddr);
+			if (ibft_verbose) {
+				printf("found iBFT via lowmem at 0x%x\n", paddr);
+			}
+		}
+		else {
+			if (ibft_verbose) {
+				printf("iBFT not found\n");
+			}
+		}
+	}
+	if (p != NULL) {
 		/* retrieve offsets */
 		error = ibft_parse_structure(p);
 		if (error) {
 			if (ibft_verbose) {
 				printf("iBFT error\n");
 			}
-			pmap_unmapdev((vm_offset_t)vaddr,
-			    (vm_size_t)IBFT_HIGH_ADDR);
+			if (need_unmap == 1) {
+				pmap_unmapdev((vm_offset_t)vaddr,
+					(vm_size_t)IBFT_HIGH_ADDR);
+			}
 			return (error);
 		}
 		ibft_signature = p;
-	}
-	else {
-		if (ibft_verbose) {
-			printf("iBFT not found\n");
-		}
 	}
 	return (0);
 }
