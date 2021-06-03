@@ -3080,7 +3080,7 @@ isboot_rsp_r2t(struct isboot_sess *sess, pdu_t *pp)
 }
 
 static int
-isboot_send_nopout(struct isboot_sess *sess, pdu_t *pp)
+isboot_send_nopout(struct isboot_sess *sess, pdu_t *pp, uint32_t *TTT_in)
 {
 	uint8_t *req = (uint8_t *)&pp->ipdu.bhs;
 	uint64_t LUN;
@@ -3091,15 +3091,24 @@ isboot_send_nopout(struct isboot_sess *sess, pdu_t *pp)
 	memset(pp, 0, sizeof(*pp));
 	req = (uint8_t *)&pp->ipdu.bhs;
 	req[0] = ISCSI_OP_NOP_OUT;
-	I_bit = 0;
+	if (TTT_in == NULL) {
+		I_bit = 0;
+		TTT = 0xffffffffU;
+	}
+	else {
+		I_bit = 1;
+		TTT = *TTT_in;
+		ITT = 0xffffffffU;
+	}
 	BDADD8(&req[0], I_bit, 6);
-        req[4] = 0;		/* TotalAHSLength */
-        DSET24(&req[5], 0);	/* DataSegmentLength */
+	req[4] = 0;		/* TotalAHSLength */
+	DSET24(&req[5], 0);	/* DataSegmentLength */
 	LUN = isboot_lun2islun(sess->lun, ISBOOT_MAX_LUNS);
 	DSET64(&req[8], LUN);
-	TTT = 0xffffffffU;
 	mtx_lock_spin(&sess->sn_mtx);
-	ITT = isboot_get_next_itt(sess);
+	if (TTT_in == NULL) {
+		ITT = isboot_get_next_itt(sess);
+	}
 	DSET32(&req[16], ITT);
 	DSET32(&req[20], TTT);
 	DSET32(&req[24], sess->cmdsn);
@@ -3127,6 +3136,7 @@ isboot_rsp_nopin(struct isboot_sess *sess, pdu_t *pp)
 	uint32_t ITT, TTT;
 	uint32_t StatSN;
 	uint32_t ExpCmdSN, MaxCmdSN;
+	int error = 0;
 
 	LUN = DGET64(&rsp[8]);
 	ITT = DGET32(&rsp[16]);
@@ -3158,6 +3168,13 @@ isboot_rsp_nopin(struct isboot_sess *sess, pdu_t *pp)
 		mtx_lock_spin(&sess->sn_mtx);
 		sess->statsn++;
 		mtx_unlock_spin(&sess->sn_mtx);
+	}
+	/* send "ping" response */
+	else {
+		error = isboot_send_nopout(sess, pp, &TTT);
+		if (error) {
+			ISBOOT_ERROR("send nopout error\n");
+		}
 	}
 	return (0);
 }
@@ -3348,7 +3365,7 @@ isboot_mainloop(void *arg)
 			    error, sess->so->so_state, sess->so->so_error);
 			if (error == EAGAIN) {
 				/* timeout */
-				error = isboot_send_nopout(sess, &pdu);
+				error = isboot_send_nopout(sess, &pdu, NULL);
 				if (error) {
 					ISBOOT_ERROR("send nopout error\n");
 				}
