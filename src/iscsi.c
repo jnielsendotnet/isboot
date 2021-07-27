@@ -107,6 +107,11 @@ struct isboot_task {
 	union ccb *ccb;
 };
 
+struct action_xmit_task {
+	TAILQ_ENTRY(action_xmit_task) tasks;
+	union ccb *ccb;
+};
+
 struct isboot_chap {
 	char *algorithm;
         char *user;
@@ -135,6 +140,7 @@ struct isboot_sess {
 	struct proc *pp;
 	struct thread *td;
 	struct socket *so;
+	struct thread *action_xmit_td;
 	// NOT USE
 	//isc_session_t *sp;
 	int fd;
@@ -177,6 +183,12 @@ struct isboot_sess {
 	uint32_t tags;
 	struct mtx task_mtx;
 	TAILQ_HEAD(,isboot_task) taskq;
+
+	/* xmit queue */
+	bool action_xmit_exit;
+	struct cv action_xmit_cv;
+	struct mtx action_xmit_mtx;
+	TAILQ_HEAD(,action_xmit_task) action_xmitq;
 
 	/* cam stuff */
 	uint32_t unit;
@@ -2012,9 +2024,8 @@ isboot_cam_set_devices(struct isboot_sess *sess)
 }
 
 static int
-isboot_scsi_io(struct cam_sim *sim, union ccb *ccb)
+isboot_scsi_io(struct isboot_sess *sess, union ccb *ccb)
 {
-	struct isboot_sess *sess;
 	struct isboot_task *taskp;
 	struct ccb_scsiio *csio;
 	struct ccb_hdr *ccb_h;
@@ -2027,8 +2038,6 @@ isboot_scsi_io(struct cam_sim *sim, union ccb *ccb)
 	int error;
 
 	ISBOOT_TRACE("isboot scsi io\n");
-	sess = (struct isboot_sess *)cam_sim_softc(sim);
-	mtx_unlock(&sess->cam_mtx);
 
 	csio = &ccb->csio;
 	ccb_h = &ccb->ccb_h;
@@ -2075,7 +2084,12 @@ isboot_scsi_io(struct cam_sim *sim, union ccb *ccb)
 		}
 		pdu.ahs_addr = isboot_malloc_pdubuf(pdu.ahs_size);
 		if (pdu.ahs_addr == NULL) {
+			ISBOOT_ERROR("isboot_malloc_pdubuf out of memory\n");
+			ccb->ccb_h.status = CAM_REQ_CMP_ERR;
+			ISBOOT_TRACE("xpt_done %x\n", ccb->ccb_h.status);
 			mtx_lock(&sess->cam_mtx);
+			xpt_done(ccb);
+			mtx_unlock(&sess->cam_mtx);
 			return (ENOMEM);
 		}
 		/* fill in AHS by left bytes */
@@ -2106,11 +2120,12 @@ isboot_scsi_io(struct cam_sim *sim, union ccb *ccb)
 	/* allocate new task */
 	taskp = isboot_malloc(sizeof(*taskp));
 	if (taskp == NULL) {
-		mtx_lock(&sess->cam_mtx);
 		ISBOOT_ERROR("taskq alloc error\n");
 		ccb->ccb_h.status = CAM_REQ_CMP_ERR;
 		ISBOOT_TRACE("xpt_done %x\n", ccb->ccb_h.status);
+		mtx_lock(&sess->cam_mtx);
 		xpt_done(ccb);
+		mtx_unlock(&sess->cam_mtx);
 		return (ENOMEM);
 	}
 	memset(taskp, 0, sizeof(*taskp));
@@ -2122,7 +2137,6 @@ isboot_scsi_io(struct cam_sim *sim, union ccb *ccb)
 	TAILQ_INSERT_TAIL(&sess->taskq, taskp, tasks);
 	mtx_unlock(&sess->task_mtx);
 	if (sess->cam_qfreeze != 0) {
-		mtx_lock(&sess->cam_mtx);
 		/* XXX should be removed in main thread */
 		ISBOOT_TRACE("added ccb, qfreeze!=0\n");
 		taskp->ccb = ccb;
@@ -2151,7 +2165,12 @@ isboot_scsi_io(struct cam_sim *sim, union ccb *ccb)
 		pdu.ds_len = 0;
 		pdu.ds_addr = isboot_malloc_pdubuf(pdu.ds_size);
 		if (pdu.ds_addr == NULL) {
+			ISBOOT_ERROR("isboot_malloc_pdubuf out of memory\n");
+			ccb->ccb_h.status = CAM_REQ_CMP_ERR;
+			ISBOOT_TRACE("xpt_done %x\n", ccb->ccb_h.status);
 			mtx_lock(&sess->cam_mtx);
+			xpt_done(ccb);
+			mtx_unlock(&sess->cam_mtx);
 			return (ENOMEM);
 		}
 	} else {
@@ -2181,7 +2200,6 @@ isboot_scsi_io(struct cam_sim *sim, union ccb *ccb)
 
 	error = isboot_xmit_pdu(sess, &pdu);
 	if (error) {
-		mtx_lock(&sess->cam_mtx);
 		/* XXX should be removed in main thread */
 		ISBOOT_ERROR("xmit pdu error=%d\n", error);
 		if (sess->cam_qfreeze == 0) {
@@ -2193,14 +2211,50 @@ isboot_scsi_io(struct cam_sim *sim, union ccb *ccb)
 		return (error);
 	}
 	isboot_free_pdu(&pdu);
-	mtx_lock(&sess->cam_mtx);
 	return (0);
+}
+
+static void
+isboot_xmit_thread(void *arg)
+{
+	struct isboot_sess *sess;
+	struct action_xmit_task *taskp;
+
+	sess = (struct isboot_sess *)arg;
+
+	while (1) {
+		mtx_lock(&sess->action_xmit_mtx);
+		while (TAILQ_EMPTY(&sess->action_xmitq) &&
+		    !sess->action_xmit_exit)
+			cv_wait(&sess->action_xmit_cv, &sess->action_xmit_mtx);
+		if (sess->action_xmit_exit) {
+			while (!TAILQ_EMPTY(&sess->action_xmitq)) {
+				taskp = TAILQ_FIRST(&sess->action_xmitq);
+				TAILQ_REMOVE(&sess->action_xmitq, taskp, tasks);
+				isboot_free(taskp);
+			}
+			sess->action_xmit_exit = false;
+			sess->action_xmit_td = NULL;
+			cv_signal(&sess->action_xmit_cv);
+			mtx_unlock(&sess->action_xmit_mtx);
+			break;
+		}
+		taskp = TAILQ_FIRST(&sess->action_xmitq);
+		TAILQ_REMOVE(&sess->action_xmitq, taskp, tasks);
+		mtx_unlock(&sess->action_xmit_mtx);
+
+		isboot_scsi_io(sess, taskp->ccb);
+		isboot_free(taskp);
+	}
+
+	kthread_exit();
 }
 
 static void
 isboot_action(struct cam_sim *sim, union ccb *ccb)
 {
 	struct isboot_sess *sess;
+	struct action_xmit_task *taskp;
 
 	ISBOOT_TRACE("isboot action %x\n", ccb->ccb_h.func_code);
 	sess = (struct isboot_sess *)cam_sim_softc(sim);
@@ -2214,7 +2268,12 @@ isboot_action(struct cam_sim *sim, union ccb *ccb)
 				break;
 			}
 		}
-		isboot_scsi_io(sim, ccb);
+		taskp = isboot_malloc(sizeof(*taskp));
+		taskp->ccb = ccb;
+		mtx_lock(&sess->action_xmit_mtx);
+		TAILQ_INSERT_TAIL(&sess->action_xmitq, taskp, tasks);
+		cv_signal(&sess->action_xmit_cv);
+		mtx_unlock(&sess->action_xmit_mtx);
 		return;
 	}
 	case XPT_CALC_GEOMETRY:
@@ -2433,6 +2492,15 @@ isboot_destroy_sess(struct isboot_sess *sess)
 	ISBOOT_TRACE("isboot destroy session\n");
 	if (sess == NULL)
 		return;
+	if (sess->action_xmit_td != NULL) {
+		mtx_lock(&sess->action_xmit_mtx);
+		sess->action_xmit_exit = true;
+		do {
+			cv_signal(&sess->action_xmit_cv);
+			cv_wait(&sess->action_xmit_cv, &sess->action_xmit_mtx);
+		} while (sess->action_xmit_exit);
+		mtx_unlock(&sess->action_xmit_mtx);
+	}
 	if (sess->so != NULL) {
 		soclose(sess->so);
 		sess->so = NULL;
@@ -2464,6 +2532,9 @@ isboot_destroy_sess(struct isboot_sess *sess)
 	mtx_destroy(&sess->xmit_mtx);
 	mtx_destroy(&sess->sn_mtx);
 	mtx_destroy(&sess->task_mtx);
+
+	cv_destroy(&sess->action_xmit_cv);
+	mtx_destroy(&sess->action_xmit_mtx);
 }
 
 static int
@@ -2622,6 +2693,15 @@ isboot_initialize_session(struct isboot_sess *sess)
 
 	/* queue */
 	TAILQ_INIT(&sess->taskq);
+
+	/* Action transmission worker initialization */
+	TAILQ_INIT(&sess->action_xmitq);
+	sess->action_xmit_exit = false;
+	mtx_init(&sess->action_xmit_mtx, "isboot action xmit mtx", NULL, MTX_DEF);
+	cv_init(&sess->action_xmit_cv, NULL);
+	sess->action_xmit_td = NULL;
+	kthread_add(isboot_xmit_thread, sess, sess->pp, &sess->action_xmit_td,
+	    0, 0, "isboot tx");
 
 	/* cam stuff */
 	sess->unit = 0;
