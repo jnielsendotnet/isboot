@@ -96,7 +96,6 @@ SYSCTL_UINT(_hw_ibft, OID_AUTO, acpi_table, CTLFLAG_RDTUN, &isboot_ibft_acpi_tab
 u_int isboot_ibft_verbose = 0;
 TUNABLE_INT("hw.ibft.verbose", &isboot_ibft_verbose);
 SYSCTL_UINT(_hw_ibft, OID_AUTO, verbose, CTLFLAG_RDTUN, &isboot_ibft_verbose, 0, "Show verbose boot messages for iBFT");
-if (bootverbose) isboot_ibft_verbose = 1;
 
 /* sysctl (isboot) */
 static struct sysctl_ctx_list isboot_clist;
@@ -547,6 +546,8 @@ isboot_init(void)
 	int name_length, name_offset;
 	int prefix;
 	int error;
+	if (bootverbose)
+		isboot_ibft_verbose = 1;
 
 	ibft = ibft_get_signature();
 	ini = ibft_get_initiator();

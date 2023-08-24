@@ -66,23 +66,11 @@ __FBSDID("$FreeBSD$");
 #include <cam/cam_xpt_periph.h>
 #include <cam/scsi/scsi_message.h>
 
-/* iscsi_initiator related */
-#ifdef USE_SYSTEM_ISCSI_HEADER
-#include <dev/iscsi_initiator/iscsi.h>
-#include <dev/iscsi_initiator/iscsivar.h>
-/* XXX this includes define of CmdSN, ExpStSN, MaxCmdSN */
-#undef CmdSN
-#undef ExpStSN
-#undef MaxCmdSN
-#else /* !USE_SYSTEM_ISCSI_HEADER */
-#include "iscsi_compat.h"
-#endif /* USE_SYSTEM_ISCSI_HEADER */
-
 /* local headers */
 #include "ibft.h"
+#include "iscsi_compat.h"
 #include "isboot.h"
 
-/*#define DEBUG*/
 #define ISBOOT_SOCK_TIMEOUT 30
 #define ISBOOT_CAM_TAGS 32
 #define ISBOOT_CAM_MAX_TAGS 255
@@ -135,8 +123,6 @@ struct isboot_sess {
 	struct proc *pp;
 	struct thread *td;
 	struct socket *so;
-	// NOT USE
-	//isc_session_t *sp;
 	int fd;
 	int timeout;
 
@@ -205,16 +191,13 @@ static struct isboot_sess isboot_g_sess;
 #define ISBOOT_CHAP_MUTUAL 3
 #define ISBOOT_CHAP_END 4
 
-#ifdef DEBUG
 #define ISBOOT_ERROR(...) do { printf(__VA_ARGS__); } while (0)
+
+#ifdef DEBUG
 #define ISBOOT_TRACE(...) do { printf(__VA_ARGS__); } while (0)
-#define ISBOOT_TRACEDUMP(LABEL, BUF, LEN) \
-	do { isboot_dump((LABEL), (BUF), (LEN)); } while (0)
 #define	__trace_used
 #else
-#define ISBOOT_ERROR(...) do { printf(__VA_ARGS__); } while (0)
 #define ISBOOT_TRACE(...)
-#define ISBOOT_TRACEDUMP(LABEL, BUF, LEN)
 #define	__trace_used __unused
 #endif
 
@@ -639,11 +622,8 @@ isboot_connect(struct isboot_sess *sess)
 static uint32_t isboot_crc32c_initial    = 0xffffffffUL;
 static uint32_t isboot_crc32c_xor        = 0xffffffffUL;
 static uint32_t isboot_crc32c_polynomial = 0x1edc6f41UL;
-#define ISBOOT_USE_CRC32C_TABLE
-#ifdef ISBOOT_USE_CRC32C_TABLE
 static uint32_t isboot_crc32c_table[256];
 static int isboot_crc32c_initialized = 0;
-#endif /* ISBOOT_USE_CRC32C_TABLE */
 
 static uint32_t
 isboot_reflect(uint32_t val, int bits)
@@ -660,7 +640,6 @@ isboot_reflect(uint32_t val, int bits)
 	return (r);
 }
 
-#ifdef ISBOOT_USE_CRC32C_TABLE
 void
 isboot_init_crc32c_table(void)
 {
@@ -682,43 +661,13 @@ isboot_init_crc32c_table(void)
 	}
 	isboot_crc32c_initialized = 1;
 }
-#endif /* ISBOOT_USE_CRC32C_TABLE */
 
 uint32_t
 isboot_update_crc32c(const uint8_t *buf, size_t len, uint32_t crc)
 {
 	size_t s;
-#ifndef ISBOOT_USE_CRC32C_TABLE
-	int i;
-	uint32_t val;
-	uint32_t reflect_polynomial;
-#endif /* ISBOOT_USE_CRC32C_TABLE */
-
-#ifdef ISBOOT_USE_CRC32C_TABLE
-#if 0
-	/* initialize by isboot_start() */
-	if (!isboot_crc32c_initialized) {
-		isboot_init_crc32c_table();
-	}
-#endif
-#else
-	reflect_polynomial = isboot_reflect(isboot_crc32c_polynomial, 32);
-#endif /* ISBOOT_USE_CRC32C_TABLE */
-
 	for (s = 0; s < len; s++) {
-#ifdef ISBOOT_USE_CRC32C_TABLE
 		crc = (crc >> 8) ^ isboot_crc32c_table[(crc ^ buf[s]) & 0xff];
-#else
-		val = buf[s];
-		for (i = 0; i < 8; i++) {
-			if ((crc ^ val) & 1) {
-				crc = (crc >> 1) ^ reflect_polynomial;
-			} else {
-				crc = (crc >> 1);
-			}
-			val = val >> 1;
-		}
-#endif /* ISBOOT_USE_CRC32C_TABLE */
 	}
 	return (crc);
 }
@@ -794,9 +743,6 @@ isboot_iovec_crc32c(const struct iovec *iovp, int iovc, uint32_t offset, uint32_
 		}
 		pos += iovp[i].iov_len;
 	}
-#if 0
-	ISBOOT_TRACE("update %d bytes\n", total);
-#endif
 	crc32c = isboot_fixup_crc32c(total, crc32c);
 	crc32c = crc32c ^ isboot_crc32c_xor;
 	return (crc32c);
@@ -1067,8 +1013,6 @@ isboot_append_param(pdu_t *pp, char *format, ...)
 	return (n);
 }
 
-
-// changed in r324446
 static void
 isboot_free_mbufext(struct mbuf *m)
 {
@@ -2231,11 +2175,7 @@ isboot_action(struct cam_sim *sim, union ccb *ccb)
 		cpi->bus_id = cam_sim_bus(sim);
 		cpi->base_transfer_speed = 300000;
 		cpi->protocol = PROTO_SCSI;
-#ifdef SCSI_REV_SPC3
 		cpi->protocol_version = SCSI_REV_SPC3;
-#else
-		cpi->protocol_version = SCSI_REV_SPC2;
-#endif
 		cpi->transport = XPORT_ISCSI;
 		cpi->transport_version = 0;
 		cpi->maxio = 1024 * 1024;
@@ -2245,11 +2185,7 @@ isboot_action(struct cam_sim *sim, union ccb *ccb)
 	case XPT_GET_TRAN_SETTINGS:
 	{
 		ccb->cts.protocol = PROTO_SCSI;
-#ifdef SCSI_REV_SPC3
 		ccb->cts.protocol_version = SCSI_REV_SPC3;
-#else
-		ccb->cts.protocol_version = SCSI_REV_SPC2;
-#endif
 		ccb->cts.transport = XPORT_ISCSI;
 		ccb->cts.transport_version = 0;
 		ccb->ccb_h.status = CAM_REQ_CMP;
@@ -2385,7 +2321,6 @@ isboot_cam_rescan(struct isboot_sess *sess)
 	ccb = xpt_alloc_ccb();
 	mtx_lock(&sess->cam_mtx);
 	if (sess->sim != NULL && sess->path != NULL) {
-		//xpt_path_lock(ccb->ccb_h.path);
 		xpt_path_lock(sess->path);
 		xpt_setup_ccb(&ccb->ccb_h, sess->path, /*priority*/5);
 		ccb->ccb_h.func_code = XPT_SCAN_BUS;
