@@ -43,6 +43,7 @@ __FBSDID("$FreeBSD$");
 
 /* tunables from isboot.c */
 extern u_int isboot_ibft_acpi_table;
+extern u_int isboot_ibft_verbose;
 
 /* location of iBFT */
 uint8_t *ibft_signature = NULL;
@@ -54,24 +55,15 @@ int ibft_target0_offset = 0;
 int ibft_nic1_offset = 0;
 int ibft_target1_offset = 0;
 
-/* flags */
-#ifdef IBFT_VERBOSE
-int ibft_verbose = 1;
-#else
-int ibft_verbose = 0;
-#endif
-
 uint8_t *
 ibft_get_signature(void)
 {
-
 	return (ibft_signature);
 }
 
 uint8_t *
 ibft_get_nic0_mac(void)
 {
-
 	if (ibft_signature == NULL)
 		return (NULL);
 	if (ibft_nic0_offset == 0)
@@ -82,7 +74,6 @@ ibft_get_nic0_mac(void)
 struct ibft_initiator *
 ibft_get_initiator(void)
 {
-
 	if (ibft_signature == NULL)
 		return (NULL);
 	return (struct ibft_initiator *)(ibft_signature +
@@ -92,7 +83,6 @@ ibft_get_initiator(void)
 struct ibft_nic *
 ibft_get_nic0(void)
 {
-
 	if (ibft_signature == NULL)
 		return (NULL);
 	if (ibft_nic0_offset == 0)
@@ -103,7 +93,6 @@ ibft_get_nic0(void)
 struct ibft_target *
 ibft_get_target0(void)
 {
-
 	if (ibft_signature == NULL)
 		return (NULL);
 	if (ibft_target0_offset == 0)
@@ -114,7 +103,6 @@ ibft_get_target0(void)
 struct ibft_nic *
 ibft_get_nic1(void)
 {
-
 	if (ibft_signature == NULL)
 		return (NULL);
 	if (ibft_nic1_offset == 0)
@@ -125,7 +113,6 @@ ibft_get_nic1(void)
 struct ibft_target *
 ibft_get_target1(void)
 {
-
 	if (ibft_signature == NULL)
 		return (NULL);
 	if (ibft_target1_offset == 0)
@@ -177,7 +164,6 @@ ibft_print_address(uint8_t *addr)
 void
 ibft_print_mac(uint8_t *addr)
 {
-
 	printf("%02x:%02x:%02x:%02x:%02x:%02x",
 	    addr[0], addr[1], addr[2], addr[3], addr[4], addr[5]);
 }
@@ -206,7 +192,7 @@ ibft_parse_structure(uint8_t *ibft)
 	oemid[6] = '\0';
 	memcpy(oemtableid, th->oemtableid, 8);
 	oemtableid[8] = '\0';
-	if (ibft_verbose) {
+	if (isboot_ibft_verbose) {
 		printf("iBFT: length=%d, revision=%d, checksum=0x%x\n",
 		    length, revision, checksum);
 		printf("iBFT: oemid='%s', oemtableid='%s'\n",
@@ -219,7 +205,7 @@ ibft_parse_structure(uint8_t *ibft)
 		sum += *((uint8_t *)ibft + i);
 	}
 	sum &= 0xffU;
-	if (ibft_verbose) {
+	if (isboot_ibft_verbose) {
 		printf("iBFT: sum = 0x%x\n", sum);
 	}
 	if (sum != 0) {
@@ -247,7 +233,7 @@ ibft_parse_structure(uint8_t *ibft)
 	if (length > 18) {
 		/* XXX optional */
 	}
-	if (ibft_verbose) {
+	if (isboot_ibft_verbose) {
 		printf("iBFT: CS: length=%d, index=%d, flags=0x%x\n",
 		    length, index, flags);
 		printf("iBFT: CS: initiator=%d, nic0=%d, target0=%d, "
@@ -269,11 +255,11 @@ ibft_parse_structure(uint8_t *ibft)
 			    id);
 			return (-1);
 		}
-		if (ibft_verbose) {
+		if (isboot_ibft_verbose) {
 			printf("iBFT: IS: length=%d, index=%d, flags=0x%x\n",
 			    length, index, flags);
 		}
-		if (ibft_verbose) {
+		if (isboot_ibft_verbose) {
 			if (!ibft_is_zero_address(ih->isns)) {
 				printf("iSNS Server:\n");
 				ibft_print_address(ih->isns);
@@ -316,7 +302,7 @@ ibft_parse_structure(uint8_t *ibft)
 			printf("iBFT: NIC0 Structure error (id=%d)\n", id);
 			return (-1);
 		}
-		if (ibft_verbose) {
+		if (isboot_ibft_verbose) {
 			printf("iBFT: NIC0: length=%d, index=%d, "
 			    "flags=0x%x\n",
 			    length, index, flags);
@@ -330,7 +316,7 @@ ibft_parse_structure(uint8_t *ibft)
 		printf("Prefix: ");
 		printf("%d\n", n0h->mask_prefix);
 
-		if (ibft_verbose) {
+		if (isboot_ibft_verbose) {
 			printf("NIC0: ");
 			printf("Origin: ");
 			printf("%d\n", n0h->origin);
@@ -343,7 +329,7 @@ ibft_parse_structure(uint8_t *ibft)
 			printf("\n");
 		}
 
-		if (ibft_verbose) {
+		if (isboot_ibft_verbose) {
 			if (!ibft_is_zero_address(n0h->pri_dns)) {
 				printf("NIC0: ");
 				printf("Primary DNS: ");
@@ -373,7 +359,7 @@ ibft_parse_structure(uint8_t *ibft)
 		ibft_print_mac(n0h->mac);
 		printf("\n");
 
-		if (ibft_verbose) {
+		if (isboot_ibft_verbose) {
 			printf("NIC0: ");
 			printf("PCI Bus/Dev/Func: ");
 			printf("%x (%x/%x/%x)\n",
@@ -404,7 +390,7 @@ ibft_parse_structure(uint8_t *ibft)
 			printf("iBFT: Target0 Structure error (id=%d)\n", id);
 			return (-1);
 		}
-		if (ibft_verbose) {
+		if (isboot_ibft_verbose) {
 			printf("iBFT: TGT0: length=%d, index=%d, "
 			    "flags=0x%x\n",
 			    length, index, flags);
@@ -421,7 +407,7 @@ ibft_parse_structure(uint8_t *ibft)
 		printf("Target LUN: ");
 		printf("%jx\n", (uintmax_t)le64toh(t0h->lun));
 
-		if (ibft_verbose) {
+		if (isboot_ibft_verbose) {
 			printf("TGT0: ");
 			printf("CHAP type: ");
 			printf("%d\n", t0h->chap_type);
@@ -439,7 +425,7 @@ ibft_parse_structure(uint8_t *ibft)
 			printf("%.*s\n", name_length, (ibft + name_offset));
 		}
 
-		if (ibft_verbose) {
+		if (isboot_ibft_verbose) {
 			name_length = t0h->chap_name_length;
 			name_offset = t0h->chap_name_offset;
 			if (name_offset != 0) {
@@ -487,7 +473,7 @@ ibft_parse_structure(uint8_t *ibft)
 			printf("iBFT: NIC1 Structure error (id=%d)\n", id);
 			return (-1);
 		}
-		if (ibft_verbose) {
+		if (isboot_ibft_verbose) {
 			printf("iBFT: NIC1: length=%d, index=%d, "
 			    "flags=0x%x\n",
 			    length, index, flags);
@@ -505,7 +491,7 @@ ibft_parse_structure(uint8_t *ibft)
 			printf("iBFT: Target1 Structure error (id=%d)\n", id);
 			return (-1);
 		}
-		if (ibft_verbose) {
+		if (isboot_ibft_verbose) {
 			printf("iBFT: TGT1: length=%d, index=%d, "
 			    "flags=0x%x\n",
 			    length, index, flags);
@@ -558,7 +544,7 @@ ibft_init(void)
 	uint32_t paddr;
 	p = ibft_acpi_lookup();
 	if (p != NULL) {
-		if (ibft_verbose) {
+		if (isboot_ibft_verbose) {
 			printf("found iBFT via ACPI\n");
 		}
 		need_unmap = 0;
@@ -570,12 +556,12 @@ ibft_init(void)
 		p = ibft_search_signature(vaddr, IBFT_HIGH_ADDR);
 		if (p != NULL) {
 			paddr = (uint32_t)(uintptr_t)(p - vaddr);
-			if (ibft_verbose) {
+			if (isboot_ibft_verbose) {
 				printf("found iBFT via lowmem at 0x%x\n", paddr);
 			}
 		}
 		else {
-			if (ibft_verbose) {
+			if (isboot_ibft_verbose) {
 				printf("iBFT not found\n");
 			}
 		}
@@ -584,7 +570,7 @@ ibft_init(void)
 		/* retrieve offsets */
 		error = ibft_parse_structure(p);
 		if (error) {
-			if (ibft_verbose) {
+			if (isboot_ibft_verbose) {
 				printf("iBFT error\n");
 			}
 			if (need_unmap == 1) {

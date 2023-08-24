@@ -93,13 +93,16 @@ SYSCTL_STRING(_hw_ibft, OID_AUTO, nic_gateway, CTLFLAG_RD, &isboot_nic_gateway_s
 static u_int isboot_ibft_acpi_table = 1;
 TUNABLE_INT("hw.ibft.acpi_table", &isboot_ibft_acpi_table);
 SYSCTL_UINT(_hw_ibft, OID_AUTO, acpi_table, CTLFLAG_RDTUN, &isboot_ibft_acpi_table, 0, "ACPI table index for iBFT");
+u_int isboot_ibft_verbose = 0;
+TUNABLE_INT("hw.ibft.verbose", &isboot_ibft_verbose);
+SYSCTL_UINT(_hw_ibft, OID_AUTO, verbose, CTLFLAG_RDTUN, &isboot_ibft_verbose, 0, "Show verbose boot messages for iBFT");
+if (bootverbose) isboot_ibft_verbose = 1;
 
 /* sysctl (isboot) */
 static struct sysctl_ctx_list isboot_clist;
 uint8_t isboot_boot_nic[ISBOOT_SYSCTL_STR_MAX];
 uint8_t isboot_boot_device[ISBOOT_SYSCTL_STR_MAX];
 
-/*#define DEBUG*/
 #ifdef DEBUG
 #define ISBOOT_TRACE(...) do { printf(__VA_ARGS__); } while (0)
 #ifdef MODDEBUG

@@ -33,6 +33,11 @@ If you want use isboot with VIMAGE kernel, add CFLAGS+= -DVIMAGE to Makefile.
 The boot device may change after installation.
 It may be necessary to edit /etc/fstab in single-user mode.
 
+The iBFT code supports two loader tunables:
+    hw.ibft.acpi_table: Defaults to 1. If you have multiple iSCSI boot
+        firmwares you may need to set this to a different value (such as 2).
+    hw.ibft.verbose: Defaults to 0. Set it to 1 to enable verbose iBFT logs.
+
 After boot you can see the boot device information via sysctl(8).
 
 For example:
