@@ -88,6 +88,12 @@ SYSCTL_UINT(_hw_ibft, OID_AUTO, target_port, CTLFLAG_RD, &isboot_target_port, 0,
 SYSCTL_QUAD(_hw_ibft, OID_AUTO, target_lun, CTLFLAG_RD, &isboot_target_lun, 0, "iBFT target lun");
 SYSCTL_UINT(_hw_ibft, OID_AUTO, nic_prefix, CTLFLAG_RD, &isboot_nic_prefix, 0, "iBFT nic prefix");
 SYSCTL_STRING(_hw_ibft, OID_AUTO, nic_gateway, CTLFLAG_RD, &isboot_nic_gateway_string, 0, "iBFT nic gateway");
+
+/* tunables */
+static u_int isboot_ibft_acpi_table = 1;
+TUNABLE_INT("hw.ibft.acpi_table", &isboot_ibft_acpi_table);
+SYSCTL_UINT(_hw_ibft, OID_AUTO, acpi_table, CTLFLAG_RDTUN, &isboot_ibft_acpi_table, 0, "ACPI table index for iBFT");
+
 /* sysctl (isboot) */
 static struct sysctl_ctx_list isboot_clist;
 uint8_t isboot_boot_nic[ISBOOT_SYSCTL_STR_MAX];

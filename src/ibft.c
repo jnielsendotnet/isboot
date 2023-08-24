@@ -41,6 +41,9 @@ __FBSDID("$FreeBSD$");
 #include "opt_acpi.h"
 #include "ibft.h"
 
+/* tunables from isboot.c */
+extern u_int isboot_ibft_acpi_table;
+
 /* location of iBFT */
 uint8_t *ibft_signature = NULL;
 
@@ -538,9 +541,9 @@ ibft_acpi_lookup(void)
 	/*ACPI_IBFT_HEADER *ibft_hdr, *end;*/
 	ACPI_STATUS status;
 
-	status = AcpiGetTable(ACPI_SIG_IBFT, 1, (ACPI_TABLE_HEADER **)&ibft);
+	status = AcpiGetTable(ACPI_SIG_IBFT, isboot_ibft_acpi_table, (ACPI_TABLE_HEADER **)&ibft);
 	if (ACPI_FAILURE(status)) {
-		status = AcpiGetTable(IBFT_SIGNATURE, 1, (ACPI_TABLE_HEADER **)&ibft);
+		status = AcpiGetTable(IBFT_SIGNATURE, isboot_ibft_acpi_table, (ACPI_TABLE_HEADER **)&ibft);
 		if (ACPI_FAILURE(status))
 			return (NULL);
 	}
