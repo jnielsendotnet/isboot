@@ -159,14 +159,21 @@ isboot_is_zero_v4addr(uint8_t *addr)
 static struct ifaddr *
 isboot_get_ifa_by_mac(uint8_t *lladdr)
 {
+#if __FreeBSD_version >= 1400094
+	if_t ifp;
+#else
 	struct ifnet *ifp;
+#endif
 	struct ifaddr *ifa;
 
 	if (lladdr == NULL)
 		return (NULL);
 
 	IFNET_RLOCK();
-#if __FreeBSD_version >= 1200064
+#if __FreeBSD_version >= 1400094
+	CK_STAILQ_FOREACH(ifp, &V_ifnet, if_link)
+		CK_STAILQ_FOREACH(ifa, &if_getaddrhead(ifp), ifa_link) {
+#elif __FreeBSD_version >= 1200064
 	CK_STAILQ_FOREACH(ifp, &V_ifnet, if_link)
 		CK_STAILQ_FOREACH(ifa, &ifp->if_addrhead, ifa_link) {
 #else
@@ -188,7 +195,11 @@ done:
 
 /* remove all address and set new IPv4 address/mask to specified interface */
 static int
+#if __FreeBSD_version >= 1400094
+isboot_set_v4addr(if_t ifp, struct sockaddr_in *addr, int prefix)
+#else
 isboot_set_v4addr(struct ifnet *ifp, struct sockaddr_in *addr, int prefix)
+#endif
 {
 	struct ifreq ifr;
 	struct ifaliasreq ifra, ifra2;
@@ -254,7 +265,11 @@ isboot_set_v4addr(struct ifnet *ifp, struct sockaddr_in *addr, int prefix)
 
 /* remove all address and set new IPv6 address/mask to specified interface */
 static int
+#if __FreeBSD_version >= 1400094
+isboot_set_v6addr(if_t ifp, struct sockaddr_in6 *addr, int prefix)
+#else
 isboot_set_v6addr(struct ifnet *ifp, struct sockaddr_in6 *addr, int prefix)
+#endif
 {
 	struct ifreq ifr;
 	struct in6_aliasreq ifra, ifra2;
@@ -462,7 +477,11 @@ isboot_set_v6gw(struct sockaddr_in6 *gateway)
 }
 
 static int
+#if __FreeBSD_version >= 1400094
+isboot_ifup(if_t ifp)
+#else
 isboot_ifup(struct ifnet *ifp)
+#endif
 {
 	struct socket *so;
 	struct ifreq ifr;
@@ -478,7 +497,11 @@ isboot_ifup(struct ifnet *ifp)
 	}
 
 	/* boot NIC */
+#if __FreeBSD_version >= 1400094
+	strlcpy(ifr.ifr_name, if_getxname(ifp), sizeof(ifr.ifr_name));
+#else
 	strlcpy(ifr.ifr_name, ifp->if_xname, sizeof(ifr.ifr_name));
+#endif
 
 	/* set IFF_UP */
 	error = ifioctl(so, SIOCGIFFLAGS, (caddr_t)&ifr, td);
@@ -509,7 +532,11 @@ isboot_init(void)
 	struct ibft_nic *nic0;
 	struct ibft_target *tgt0;
 	struct ifaddr *ifa;
+#if __FreeBSD_version >= 1400094
+	if_t ifp;
+#else
 	struct ifnet *ifp;
+#endif
 	uint8_t *ibft;
 	int name_length, name_offset;
 	int prefix;
@@ -529,7 +556,11 @@ isboot_init(void)
 	if (ifa == NULL)
 		return (ESRCH);
 	ifp = ifa->ifa_ifp;
+#if __FreeBSD_version >= 1400094
+	printf("Boot NIC: %s\n", if_getxname(ifp));
+#else
 	printf("Boot NIC: %s\n", ifp->if_xname);
+#endif
 
 	/* interface UP */
 	error = isboot_ifup(ifp);
@@ -664,7 +695,11 @@ isboot_init(void)
 	SYSCTL_ADD_STRING(&isboot_clist, SYSCTL_CHILDREN(oidp),
 	    OID_AUTO, "device", CTLFLAG_RD, isboot_boot_device, 0,
 	    "iSCSI boot driver device");
+#if __FreeBSD_version >= 1400094
+	strlcpy(isboot_boot_nic, if_getxname(ifp),
+#else
 	strlcpy(isboot_boot_nic, ifp->if_xname,
+#endif
 	    sizeof(isboot_boot_nic));
 	strlcpy(isboot_boot_device, "",
 	    sizeof(isboot_boot_device));
