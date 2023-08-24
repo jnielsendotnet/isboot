@@ -1,9 +1,17 @@
 The iSCSI boot driver for FreeBSD
 
-This driver provides iSCSI boot feature to FreeBSD.
-It can be used with the bootable initiator such as the Intel NICs and iPXE/gPXE.
-It connects with the iSCSI target specified by iBFT automatically.
-Therefore, a diskless machine is also simply possible.
+This driver provides an iSCSI boot feature for FreeBSD. It can be used with a
+bootable initiator offered by many server BIOSes, NIC firmwares or iPXE/gPXE.
+It connects to the iSCSI target specified in the iSCSI Boot Firmware Table
+(iBFT) automatically, making it simple to run a diskless machine.
+
+Your boot firmware will create and populate the iBFT, connect to the specified
+iSCSI target and attempt to boot from the target volume (like any other
+supported disk). Any normal bootloader (such as FreeBSD's gptboot) can be used.
+The bootloader should load the kernel and modules (including isboot) and begin
+execution. During boot, the isboot driver configures the NIC and creates a new
+connection to the iSCSI target. The disk is then available to the operating
+system as normal, and can be used to mount the root volume.
 
 Installation:
 
@@ -23,15 +31,15 @@ Installation:
 Note:
 If you want use isboot with VIMAGE kernel, add CFLAGS+= -DVIMAGE to Makefile.
 The boot device may change after installation.
-It may be necessary to edit /etc/fstab in single mode.
-IP address and gateway are reflected in the boot device.
-You can see the boot device information by sysctl(8).
+It may be necessary to edit /etc/fstab in single-user mode.
 
-The following is an example with FreeBSD 10.0 and iPXE.
+After boot you can see the boot device information via sysctl(8).
+
+For example:
 
     # sysctl net.isboot
-    net.isboot.version: 0.2.7
-    net.isboot.nic: em0
+    net.isboot.version: 0.2.14
+    net.isboot.nic: cxbge0
     net.isboot.device: da1
 
     # sysctl hw.ibft
@@ -49,17 +57,20 @@ The following is an example with FreeBSD 10.0 and iPXE.
     pass1: Serial Number 10002800
     pass1: 300.000MB/s transfers
 
-Tested targets and initiators:
- o istgt-20121123 (XigmaNAS bundled version: https://www.xigmanas.com/)
- o iPXE/USB with Intel DN2800MT. (old test at blog: http://shell.peach.ne.jp/aoyama/archives/2100)
+Supported OS versions:
+ o FreeBSD 12.4
+ o FreeBSD 13.2
+ o FreeBSD 14.0
 
-Tested OS versions:
- o FreeBSD 12.2
- o FreeBSD 13.0
+Project website:
+https://github.com/jnielsendotnet/isboot
 
-For more information, go to Japanese blog at:
-http://shell.peach.ne.jp/aoyama/
+The original author's blog (in Japanese) had some additional information:
+https://web.archive.org/web/20160810012908/http://shell.peach.ne.jp/aoyama/
 
 Authors:
 Daisuke Aoyama <aoyama@peach.ne.jp>
 Michael Zoon <zoon01@xigmanas.com>
+
+Contributors:
+John Nielsen <john@jnielsen.net>
