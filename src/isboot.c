@@ -53,7 +53,7 @@ __FBSDID("$FreeBSD$");
 #include "ibft.h"
 #include "isboot.h"
 
-static char *isboot_driver_version = "0.2.15-alpha";
+static char *isboot_driver_version = "0.2.15";
 
 /* boot iSCSI initiator and target */
 uint8_t isboot_initiator_name[ISBOOT_NAME_MAX];
@@ -800,4 +800,5 @@ MODULE_VERSION(isboot, 1);
 MODULE_DEPEND(isboot, ether, 1, 1, 1);
 MODULE_DEPEND(isboot, icl, 1, 1, 1);
 MODULE_DEPEND(isboot, cam, 1, 1, 1);
-DECLARE_MODULE(isboot, mod_data, SI_SUB_PROTO_END, SI_ORDER_ANY);
+/* Delay loading as long as possible to ensure NIC drivers and their dependencies have loaded first */
+DECLARE_MODULE(isboot, mod_data, SI_SUB_ROOT_CONF-1, SI_ORDER_ANY);
