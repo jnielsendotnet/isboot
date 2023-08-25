@@ -40,8 +40,10 @@ __FBSDID("$FreeBSD$");
 #include <sys/sysctl.h>
 #include <net/if.h>
 #include <net/if_dl.h>
+#if __FreeBSD_version < 1400094
 #include <net/if_types.h>
 #include <net/if_var.h>
+#endif
 #include <net/ethernet.h>
 #include <netinet/in.h>
 #include <netinet/in_var.h>
@@ -164,27 +166,40 @@ isboot_is_zero_v4addr(uint8_t *addr)
 }
 
 /* find interface by MAC address */
-static struct ifaddr *
-isboot_get_ifa_by_mac(uint8_t *lladdr)
+#if __FreeBSD_version >= 1400094
+u_int isboot_get_ifp_by_mac_lladr_cb(void *lladdr, struct sockaddr_dl *sdl, u_int count) {
+	if (count > 0)
+		return 0;
+	if (memcmp((uint8_t *)lladdr, LLADDR(sdl), ETHER_ADDR_LEN) == 0)
+		return 1;
+	return 0;
+}
+
+static if_t
+#else
+static struct ifnet *
+#endif
+isboot_get_ifp_by_mac(uint8_t *lladdr)
 {
 #if __FreeBSD_version >= 1400094
 	if_t ifp;
+	u_int count = 0;
 #else
+	struct ifaddr *ifa;
 	struct ifnet *ifp;
 #endif
-	struct ifaddr *ifa;
 
 	if (lladdr == NULL)
 		return (NULL);
 
 	IFNET_RLOCK();
+	CK_STAILQ_FOREACH(ifp, &V_ifnet, if_link)
 #if __FreeBSD_version >= 1400094
-	CK_STAILQ_FOREACH(ifp, &V_ifnet, if_link)
-		CK_STAILQ_FOREACH(ifa, &if_getaddrhead(ifp), ifa_link) {
+		count = if_foreach_lladdr(ifp, find_ifp_lladr_cb, lladdr);
+		if (count > 0)
+			goto done;
 #else
-	CK_STAILQ_FOREACH(ifp, &V_ifnet, if_link)
 		CK_STAILQ_FOREACH(ifa, &ifp->if_addrhead, ifa_link) {
-#endif
 			if (ifa->ifa_addr->sa_family != AF_LINK)
 				continue;
 			if (memcmp(lladdr,
@@ -192,10 +207,11 @@ isboot_get_ifa_by_mac(uint8_t *lladdr)
 				ETHER_ADDR_LEN) == 0)
 				goto done;
 		}
-	ifa = NULL;
+#endif
+	ifp = NULL;
 done:
 	IFNET_RUNLOCK();
-	return (ifa);
+	return (ifp);
 }
 
 /* remove all address and set new IPv4 address/mask to specified interface */
@@ -503,7 +519,7 @@ isboot_ifup(struct ifnet *ifp)
 
 	/* boot NIC */
 #if __FreeBSD_version >= 1400094
-	strlcpy(ifr.ifr_name, if_getxname(ifp), sizeof(ifr.ifr_name));
+	strlcpy(ifr.ifr_name, if_name(ifp), sizeof(ifr.ifr_name));
 #else
 	strlcpy(ifr.ifr_name, ifp->if_xname, sizeof(ifr.ifr_name));
 #endif
@@ -536,7 +552,6 @@ isboot_init(void)
 	struct ibft_initiator *ini;
 	struct ibft_nic *nic0;
 	struct ibft_target *tgt0;
-	struct ifaddr *ifa;
 #if __FreeBSD_version >= 1400094
 	if_t ifp;
 #else
@@ -559,12 +574,11 @@ isboot_init(void)
 		return (ENXIO);
 
 	/* find booted NIC from MAC address */
-	ifa = isboot_get_ifa_by_mac(nic0->mac);
-	if (ifa == NULL)
+	ifp = isboot_get_ifp_by_mac(nic0->mac);
+	if (ifp == NULL)
 		return (ESRCH);
-	ifp = ifa->ifa_ifp;
 #if __FreeBSD_version >= 1400094
-	printf("Boot NIC: %s\n", if_getxname(ifp));
+	printf("Boot NIC: %s\n", if_name(ifp));
 #else
 	printf("Boot NIC: %s\n", ifp->if_xname);
 #endif
@@ -703,7 +717,7 @@ isboot_init(void)
 	    OID_AUTO, "device", CTLFLAG_RD, isboot_boot_device, 0,
 	    "iSCSI boot driver device");
 #if __FreeBSD_version >= 1400094
-	strlcpy(isboot_boot_nic, if_getxname(ifp),
+	strlcpy(isboot_boot_nic, if_name(ifp),
 #else
 	strlcpy(isboot_boot_nic, ifp->if_xname,
 #endif
