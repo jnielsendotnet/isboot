@@ -2864,7 +2864,7 @@ isboot_rsp_read_data(struct isboot_sess *sess, pdu_t *pp)
 		xpt_done(ccb);
 		mtx_unlock(&sess->cam_mtx);
 	}
-	if (F_bit) {
+	if (F_bit & S_bit) {
 		mtx_lock(&sess->task_mtx);
 		ISBOOT_TRACE("remove ccb ITT=%x\n", taskp->ITT);
 		TAILQ_REMOVE(&sess->taskq, taskp, tasks);
