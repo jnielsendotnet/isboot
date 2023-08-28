@@ -1,6 +1,6 @@
 /*-
- * Copyright (C) 2010-2015 Daisuke Aoyama <aoyama@peach.ne.jp>
- * All rights reserved.
+ * Copyright (c) 2010-2015 Daisuke Aoyama <aoyama@peach.ne.jp>
+ * Copyright (c) 2021-2023 John Nielsen <john@jnielsen.net>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions

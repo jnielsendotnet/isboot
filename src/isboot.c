@@ -1,6 +1,6 @@
 /*-
- * Copyright (C) 2010-2015 Daisuke Aoyama <aoyama@peach.ne.jp>
- * All rights reserved.
+ * Copyright (c) 2010-2015 Daisuke Aoyama <aoyama@peach.ne.jp>
+ * Copyright (c) 2021-2023 John Nielsen <john@jnielsen.net>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -40,9 +40,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/sysctl.h>
 #include <net/if.h>
 #include <net/if_dl.h>
-#if __FreeBSD_version < 1400094
 #include <net/if_types.h>
-#endif
 #include <net/if_var.h>
 #include <net/ethernet.h>
 #include <netinet/in.h>
@@ -119,7 +117,6 @@ uint8_t isboot_boot_device[ISBOOT_SYSCTL_STR_MAX];
 char *
 isboot_get_boot_nic(void)
 {
-
 	if (strlen(isboot_boot_nic) == 0)
 		return (NULL);
 	return (isboot_boot_nic);
@@ -128,7 +125,6 @@ isboot_get_boot_nic(void)
 char *
 isboot_get_boot_device(void)
 {
-
 	if (strlen(isboot_boot_device) == 0)
 		return (NULL);
 	return (isboot_boot_device);
@@ -737,14 +733,12 @@ isboot_init(void)
 static void
 isboot_destroy(void)
 {
-
 	sysctl_ctx_free(&isboot_clist);
 }
 
 static void
 isboot_version(void)
 {
-
 	printf("iSCSI boot driver version %s\n", isboot_driver_version);
 }
 
