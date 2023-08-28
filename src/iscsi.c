@@ -1607,7 +1607,7 @@ isboot_do_login(struct isboot_sess *sess)
 {
 	pdu_t pdu, *pp;
 	uint8_t *req;
-	static int I_bit = 1;
+	int I_bit;
 	int T_bit, C_bit;
 	int CSG, NSG;
 	int error;
@@ -1640,13 +1640,10 @@ next_loginpdu:
 	req = (uint8_t *)&pdu.ipdu.bhs;
 	memset(req, 0, ISCSI_BHS_LEN);
 	req[0] = ISCSI_OP_LOGIN_REQ;
-	/* Flip I bit each time as a cheap way to toggle between Login
-	 * and Login (retry). Some targets (eg ctld) do not handle
-	 * the later */
-	I_bit ^= 1;
+	I_bit = 1;
 	T_bit = C_bit = 0;
 	CSG = NSG = 0;
-	BDADD8(&req[0], I_bit, 7);
+	BDADD8(&req[0], I_bit, 6);
 	BDADD8(&req[1], T_bit, 7);
 	BDADD8(&req[1], C_bit, 6);
 	BDADD8W(&req[1], CSG, 3, 2);
