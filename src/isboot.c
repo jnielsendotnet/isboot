@@ -42,8 +42,8 @@ __FBSDID("$FreeBSD$");
 #include <net/if_dl.h>
 #if __FreeBSD_version < 1400094
 #include <net/if_types.h>
-#include <net/if_var.h>
 #endif
+#include <net/if_var.h>
 #include <net/ethernet.h>
 #include <netinet/in.h>
 #include <netinet/in_var.h>
@@ -167,7 +167,9 @@ isboot_is_zero_v4addr(uint8_t *addr)
 
 /* find interface by MAC address */
 #if __FreeBSD_version >= 1400094
-u_int isboot_get_ifp_by_mac_lladr_cb(void *lladdr, struct sockaddr_dl *sdl, u_int count) {
+static u_int
+get_ifp_lladr_cb(void *lladdr, struct sockaddr_dl *sdl, u_int count)
+{
 	if (count > 0)
 		return 0;
 	if (memcmp((uint8_t *)lladdr, LLADDR(sdl), ETHER_ADDR_LEN) == 0)
@@ -183,7 +185,8 @@ isboot_get_ifp_by_mac(uint8_t *lladdr)
 {
 #if __FreeBSD_version >= 1400094
 	if_t ifp;
-	u_int count = 0;
+	struct if_iter iter;
+	u_int count;
 #else
 	struct ifaddr *ifa;
 	struct ifnet *ifp;
@@ -192,13 +195,16 @@ isboot_get_ifp_by_mac(uint8_t *lladdr)
 	if (lladdr == NULL)
 		return (NULL);
 
+#if __FreeBSD_version >= 1400094
+	for (ifp = if_iter_start(&iter); ifp != NULL; ifp = if_iter_next(&iter)) {
+		count = if_foreach_lladdr(ifp, get_ifp_lladr_cb, lladdr);
+		if (count > 0)
+			break;
+	}
+	if_iter_finish(&iter);
+#else
 	IFNET_RLOCK();
 	CK_STAILQ_FOREACH(ifp, &V_ifnet, if_link)
-#if __FreeBSD_version >= 1400094
-		count = if_foreach_lladdr(ifp, find_ifp_lladr_cb, lladdr);
-		if (count > 0)
-			goto done;
-#else
 		CK_STAILQ_FOREACH(ifa, &ifp->if_addrhead, ifa_link) {
 			if (ifa->ifa_addr->sa_family != AF_LINK)
 				continue;
@@ -207,10 +213,10 @@ isboot_get_ifp_by_mac(uint8_t *lladdr)
 				ETHER_ADDR_LEN) == 0)
 				goto done;
 		}
-#endif
 	ifp = NULL;
 done:
 	IFNET_RUNLOCK();
+#endif
 	return (ifp);
 }
 
