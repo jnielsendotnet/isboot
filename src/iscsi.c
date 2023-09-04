@@ -3467,7 +3467,7 @@ isboot_iscsi_start(void)
 
 	/* initial task proc */
 	memset(&kproc, 0, sizeof(kproc));
-	kproc.arg0 = "isboot driver";
+	kproc.arg0 = "isboot";
 	kproc.func = isboot_kproc;
 	kproc.global_procpp = &sess->pp;
 	ISBOOT_TRACE("kproc_start\n");

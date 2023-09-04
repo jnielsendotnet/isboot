@@ -43,29 +43,31 @@ After boot you can see the boot device information via sysctl(8).
 For example:
 
     # sysctl net.isboot
-    net.isboot.version: 0.2.14
-    net.isboot.nic: cxbge0
-    net.isboot.device: da1
+    net.isboot.device: da5
+    net.isboot.nic: cxl0
+    net.isboot.version: 0.2.15
 
     # sysctl hw.ibft
-    hw.ibft.initiator_name: iqn.2010-04.org.ipxe:dn2800mt
-    hw.ibft.initiator_address: 172.18.0.139
-    hw.ibft.target_name: iqn.2007-09.jp.ne.peach:aria:dn2800mt-boot
-    hw.ibft.target_address: 172.18.0.26
-    hw.ibft.target_port: 3260
+    hw.ibft.verbose: 1
+    hw.ibft.acpi_table: 1
+    hw.ibft.nic_gateway: 0.0.0.0
+    hw.ibft.nic_prefix: 24
     hw.ibft.target_lun: 0
-    hw.ibft.nic_prefix: 16
-    hw.ibft.nic_gateway: 172.18.0.1
+    hw.ibft.target_port: 3260
+    hw.ibft.target_address: 192.168.104.10
+    hw.ibft.target_name: iqn.2002-05.net.jnielsen:max-iscsi
+    hw.ibft.initiator_address: 192.168.104.9
+    hw.ibft.initiator_name: iqn.2020-06.com.chelsio.boot:0007432FFBD0
 
-    # camcontrol inquiry da1
-    pass1: <FreeBSD iSCSI DISK 0001> Fixed Direct Access SCSI-5 device
-    pass1: Serial Number 10002800
-    pass1: 300.000MB/s transfers
+    # camcontrol inquiry da5
+    pass8: <JNC iSCSI 0001> Fixed Direct Access SPC-5 SCSI device
+    pass8: Serial Number 42
+    pass8: 300.000MB/s transfers
 
 Supported OS versions:
  o FreeBSD 12.4
  o FreeBSD 13.2
- o FreeBSD 14.0
+ o FreeBSD 14.x
 
 Project website:
 https://github.com/jnielsendotnet/isboot
