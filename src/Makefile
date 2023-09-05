@@ -8,8 +8,8 @@ SRCS+=	opt_cam.h device_if.h bus_if.h opt_acpi.h
 # For kernel with options VIMAGE
 #CFLAGS+= -DVIMAGE
 
-# Extra debug output
-#CFLAGS+= -DDEBUG -DMODDEBUG
+# Module debug output
+#CFLAGS+= -DMODDEBUG
 
 #CFLAGS+= -DISBOOT_OPT_PREFERRED_HEADER_DIGEST
 #CFLAGS+= -DISBOOT_OPT_PREFERRED_DATA_DIGEST

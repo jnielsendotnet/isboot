@@ -38,6 +38,9 @@ The iBFT code supports two loader tunables:
         firmwares you may need to set this to a different value (such as 2).
     hw.ibft.verbose: Defaults to 0. Set it to 1 to enable verbose iBFT logs.
 
+Similarly, there is a loader tunable for isboot debugging:
+    net.isboot.debug: Defaults to 0. Set it to 1 to enable isboot trace messages.
+
 After boot you can see the boot device information via sysctl(8).
 
 For example:

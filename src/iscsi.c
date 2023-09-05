@@ -193,13 +193,8 @@ static struct isboot_sess isboot_g_sess;
 
 #define ISBOOT_ERROR(...) do { printf(__VA_ARGS__); } while (0)
 
-#ifdef DEBUG
-#define ISBOOT_TRACE(...) do { printf(__VA_ARGS__); } while (0)
-#define	__trace_used
-#else
-#define ISBOOT_TRACE(...)
-#define	__trace_used __unused
-#endif
+extern u_int isboot_trace;
+#define ISBOOT_TRACE(...) do { if(isboot_trace != 0) printf(__VA_ARGS__); } while (0)
 
 #ifdef ISBOOT_OPT_PREFERRED_HEADER_DIGEST
 static char *isboot_opt_hd = "CRC32C,None";
@@ -1875,13 +1870,12 @@ isboot_cam_set_devices(struct isboot_sess *sess)
 	union ccb ccb;
 	int target_id;
 	int lun, luns;
-	int i, n;
+	int i;
 
 	ISBOOT_TRACE("set devices on bus%d\n", cam_sim_path(sess->sim));
 	target_id = 0;
 	lun = sess->lun;
 	luns = 0;
-	n = 0;
 	mtx_lock(&sess->cam_mtx);
 	for (i = 0; i < ISBOOT_MAX_LUNS; i++) {
 		if (xpt_create_path(&path, xpt_periph,
@@ -1930,8 +1924,6 @@ isboot_cam_set_devices(struct isboot_sess *sess)
 		xpt_action(&ccb);
 		if ((ccb.ccb_h.status & CAM_STATUS_MASK) != CAM_REQ_CMP) {
 			ISBOOT_TRACE("XPT error\n");
-		} else {
-			n++;
 		}
 		xpt_free_path(path);
 	}
@@ -2596,11 +2588,11 @@ isboot_rsp_scsi(struct isboot_sess *sess, pdu_t *pp)
 	struct isboot_task *taskp;
 	union ccb *ccb;
 	uint32_t ITT;
-	uint32_t StatSN __trace_used;
-	uint32_t ExpCmdSN __trace_used, MaxCmdSN __trace_used;
-	uint32_t ExpDataSN __trace_used;
+	uint32_t StatSN;
+	uint32_t ExpCmdSN, MaxCmdSN;
+	uint32_t ExpDataSN;
 	int status, response;
-	int o_bit __trace_used, u_bit __trace_used, O_bit, U_bit;
+	int o_bit, u_bit, O_bit, U_bit;
 	int residual;
 	int len, sense_len;
 
@@ -2734,9 +2726,9 @@ isboot_rsp_read_data(struct isboot_sess *sess, pdu_t *pp)
 	union ccb *ccb;
 	uint8_t *data;
 	uint32_t ITT;
-	uint32_t StatSN __trace_used;
-	uint32_t ExpCmdSN __trace_used, MaxCmdSN __trace_used;
-	uint32_t DataSN __trace_used, ExpDataSN;
+	uint32_t StatSN;
+	uint32_t ExpCmdSN, MaxCmdSN;
+	/* uint32_t DataSN, ExpDataSN; */
 	uint32_t TL;
 	int offset;
 	int status, response;
@@ -2760,7 +2752,7 @@ isboot_rsp_read_data(struct isboot_sess *sess, pdu_t *pp)
 
 	data = ccb->csio.data_ptr;
 	offset = 0;
-	ExpDataSN = 0;
+	/* ExpDataSN = 0; */
 
 	TL = ccb->csio.dxfer_len;
 	len = pp->ds_len;
@@ -2788,7 +2780,7 @@ isboot_rsp_read_data(struct isboot_sess *sess, pdu_t *pp)
 	ITT = DGET32(&rsp[16]);
 	ExpCmdSN = DGET32(&rsp[28]);
 	MaxCmdSN = DGET32(&rsp[32]);
-	DataSN = DGET32(&rsp[36]);
+	/* DataSN = DGET32(&rsp[36]); */
 	offset = DGET32(&rsp[40]);
 	residual = DGET32(&rsp[44]);
 
@@ -2804,7 +2796,7 @@ isboot_rsp_read_data(struct isboot_sess *sess, pdu_t *pp)
 	ISBOOT_TRACE("F=%d, S=%d, O=%d, U=%d\n", F_bit, S_bit, O_bit, U_bit);
 	ISBOOT_TRACE("TL=%d, offset=%d, len=%d\n", TL, offset, len);
 	memcpy(data + offset, pp->ds_addr, ISCSI_ALIGN(pp->ds_len));
-	ExpDataSN++;
+	/* ExpDataSN++; */
 
 	if (S_bit) {
 		ccb->csio.resid = 0;
@@ -2884,7 +2876,7 @@ isboot_rsp_r2t(struct isboot_sess *sess, pdu_t *pp)
 	uint64_t LUN;
 	uint32_t ITT, TTT;
 	uint32_t StatSN;
-	uint32_t ExpCmdSN __trace_used, MaxCmdSN __trace_used;
+	uint32_t ExpCmdSN, MaxCmdSN;
 	uint32_t DataSN;
 	uint32_t TL;
 	int error;
@@ -3039,8 +3031,8 @@ isboot_rsp_nopin(struct isboot_sess *sess, pdu_t *pp)
 {
 	uint8_t *rsp = (uint8_t *)&pp->ipdu.bhs;
 	uint32_t ITT, TTT;
-	uint32_t StatSN __trace_used;
-	uint32_t ExpCmdSN __trace_used, MaxCmdSN __trace_used;
+	uint32_t StatSN;
+	uint32_t ExpCmdSN, MaxCmdSN;
 	int error = 0;
 
 	ITT = DGET32(&rsp[16]);
