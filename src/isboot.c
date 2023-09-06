@@ -560,8 +560,6 @@ isboot_init(void)
 	int name_length, name_offset;
 	int prefix;
 	int error;
-	if (bootverbose)
-		isboot_ibft_verbose = 1;
 
 	ibft = ibft_get_signature();
 	ini = ibft_get_initiator();
@@ -752,6 +750,8 @@ isboot_handler(module_t mod, int what, void *arg)
 	case MOD_LOAD:
 		ISBOOT_MODTRACE("Load isboot\n");
 		isboot_version();
+		if (bootverbose)
+			isboot_ibft_verbose = 1;
 		(void)ibft_init();
 		if (ibft_get_signature() != NULL) {
 			err = isboot_init();
