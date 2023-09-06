@@ -101,10 +101,9 @@ SYSCTL_UINT(_hw_ibft, OID_AUTO, verbose, CTLFLAG_RDTUN, &isboot_ibft_verbose, 0,
 static struct sysctl_ctx_list isboot_clist;
 uint8_t isboot_boot_nic[ISBOOT_SYSCTL_STR_MAX];
 uint8_t isboot_boot_device[ISBOOT_SYSCTL_STR_MAX];
-u_int isboot_trace = 0;
-TUNABLE_INT("net.isboot.debug", &isboot_trace);
+u_int isboot_trace_level = 0;
+TUNABLE_INT("net.isboot.debug", &isboot_trace_level);
 
-#define ISBOOT_TRACE(...) do { if(isboot_trace != 0) printf(__VA_ARGS__); } while (0)
 #ifdef MODDEBUG
 #define ISBOOT_MODTRACE(...) do { printf(__VA_ARGS__); } while (0)
 #else
@@ -714,7 +713,7 @@ isboot_init(void)
 	    OID_AUTO, "device", CTLFLAG_RD, isboot_boot_device, 0,
 	    "iSCSI boot driver device");
 	SYSCTL_ADD_UINT(&isboot_clist, SYSCTL_CHILDREN(oidp),
-	    OID_AUTO, "debug", CTLFLAG_RDTUN, &isboot_trace, 0,
+	    OID_AUTO, "debug", CTLFLAG_RDTUN, &isboot_trace_level, 0,
 	    "Show iSCSI boot driver debug (trace) messages");
 #if __FreeBSD_version >= 1400094
 	strlcpy(isboot_boot_nic, if_name(ifp),

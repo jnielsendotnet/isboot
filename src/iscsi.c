@@ -193,8 +193,11 @@ static struct isboot_sess isboot_g_sess;
 
 #define ISBOOT_ERROR(...) do { printf(__VA_ARGS__); } while (0)
 
-extern u_int isboot_trace;
-#define ISBOOT_TRACE(...) do { if(isboot_trace != 0) printf(__VA_ARGS__); } while (0)
+extern u_int isboot_trace_level;
+#define ISBOOT_LVL_WARN 1
+#define ISBOOT_LVL_INFO 2
+#define ISBOOT_LVL_DEBUG 3
+#define ISBOOT_TRACE(lvl, ...) do { if(isboot_trace_level >= lvl) printf(__VA_ARGS__); } while (0)
 
 #ifdef ISBOOT_OPT_PREFERRED_HEADER_DIGEST
 static char *isboot_opt_hd = "CRC32C,None";
@@ -274,7 +277,7 @@ isboot_strdup(const char *s)
 		panic("no memory");
 	memcpy(p, s, n);
 	p[n] = '\0';
-	ISBOOT_TRACE("strdup(%s)%zu\n", s, n);
+	ISBOOT_TRACE(ISBOOT_LVL_DEBUG, "strdup(%s)%zu\n", s, n);
 	return (p);
 }
 
@@ -311,7 +314,7 @@ isboot_free_str(void *p)
 
 	if (p == NULL)
 		return;
-	ISBOOT_TRACE("free[%s]\n", (char *)p);
+	ISBOOT_TRACE(ISBOOT_LVL_DEBUG, "free[%s]\n", (char *)p);
 	free(p, M_ISBOOTSTR);
 }
 
@@ -393,7 +396,7 @@ isboot_connect(struct isboot_sess *sess)
 	}
 
 	/* open socket */
-	ISBOOT_TRACE("open socket\n");
+	ISBOOT_TRACE(ISBOOT_LVL_INFO, "open socket\n");
 	sess->family = sa.ss_family;
 	family = (sess->family == AF_INET) ? PF_INET : PF_INET6;
 	error = socreate(family, &so, SOCK_STREAM, 0, sess->td->td_ucred,
@@ -449,7 +452,7 @@ isboot_connect(struct isboot_sess *sess)
 	}
 
 	/* connect to the target */
-	ISBOOT_TRACE("try connect...(%x)\n", curthread->td_tid);
+	ISBOOT_TRACE(ISBOOT_LVL_INFO, "try connect...(%x)\n", curthread->td_tid);
 	error = soconnect(so, (struct sockaddr *)&sa, sess->td);
 	if (error) {
 		ISBOOT_ERROR("connect error\n");
@@ -458,7 +461,7 @@ isboot_connect(struct isboot_sess *sess)
 	}
 
 	/* wait for the connection to complete */
-	ISBOOT_TRACE("wait connect...\n");
+	ISBOOT_TRACE(ISBOOT_LVL_INFO, "wait connect...\n");
 	SOCK_LOCK(so);
 	while ((so->so_state & SS_ISCONNECTING) && so->so_error == 0) {
 		error = msleep(&so->so_timeo, SOCK_MTX(so), PSOCK | PCATCH,
@@ -480,7 +483,7 @@ isboot_connect(struct isboot_sess *sess)
 	}
 
 	/* now session is valid */
-	ISBOOT_TRACE("old so=%p, new so=%p\n", sess->so, so);
+	ISBOOT_TRACE(ISBOOT_LVL_DEBUG, "old so=%p, new so=%p\n", sess->so, so);
 	sess->so = so;
 	return (0);
 }
@@ -1013,7 +1016,7 @@ isboot_free_mbufext(struct mbuf *m)
 {
 	void *p = m->m_ext.ext_buf;
 
-	ISBOOT_TRACE("isboot_free_mbufext\n");
+	ISBOOT_TRACE(ISBOOT_LVL_DEBUG, "isboot_free_mbufext\n");
 	if (p == NULL)
 		return;
 	isboot_free_mext(p);
@@ -1095,7 +1098,7 @@ isboot_xmit_pdu(struct isboot_sess *sess, pdu_t *pp)
 	/* send mbuf chain */
 	if (sess->so == NULL) {
 		/* should not happen */
-		ISBOOT_TRACE("so=NULL\n");
+		ISBOOT_TRACE(ISBOOT_LVL_DEBUG, "so=NULL\n");
 		return (ENXIO);
 	}
 	error = sosend(sess->so, NULL, NULL, mh, NULL, 0, sess->td);
@@ -1304,7 +1307,7 @@ isboot_update_option(struct isboot_sess *sess, pdu_t *pp)
 		}
 		*q++ = '\0';
 		np = vp = q;
-		ISBOOT_TRACE("KEY=[%s], VAL=[%s]\n", kp, vp);
+		ISBOOT_TRACE(ISBOOT_LVL_DEBUG, "KEY=[%s], VAL=[%s]\n", kp, vp);
 		if (strcasecmp(vp, "Reject") == 0 ||
 		    strcasecmp(vp, "Irrelevant") == 0 ||
 		    strcasecmp(vp, "NotUnderstood") == 0) {
@@ -1407,7 +1410,7 @@ isboot_update_security(struct isboot_sess *sess, pdu_t *pp)
 		}
 		*q++ = '\0';
 		np = vp = q;
-		ISBOOT_TRACE("KEY=[%s], VAL=[%s]\n", kp, vp);
+		ISBOOT_TRACE(ISBOOT_LVL_DEBUG, "KEY=[%s], VAL=[%s]\n", kp, vp);
 		if (strcasecmp(vp, "Reject") == 0 ||
 		    strcasecmp(vp, "Irrelevant") == 0 ||
 		    strcasecmp(vp, "NotUnderstood") == 0) {
@@ -1608,7 +1611,7 @@ isboot_do_login(struct isboot_sess *sess)
 	int error;
 	int xcnt;
 
-	ISBOOT_TRACE("login start\n");
+	ISBOOT_TRACE(ISBOOT_LVL_INFO, "login start\n");
 	sess->chap_stage = ISBOOT_CHAP_NONE;
 	if (sess->req_auth != 0) {
 		/* deal with CHAP */
@@ -1800,20 +1803,20 @@ next_loginpdu:
 		return (EOPNOTSUPP);
 	}
 
-	ISBOOT_TRACE("xmit PDU\n");
+	ISBOOT_TRACE(ISBOOT_LVL_DEBUG, "xmit PDU\n");
 	error = isboot_xmit_pdu(sess, pp);
 	if (error) {
 		isboot_free_pdu(pp);
 		return (error);
 	}
-	ISBOOT_TRACE("recv PDU\n");
+	ISBOOT_TRACE(ISBOOT_LVL_DEBUG, "recv PDU\n");
 	error = isboot_recv_pdu(sess, pp);
 	if (error) {
 		isboot_free_pdu(pp);
 		return (error);
 	}
 	if (sess->stage == ISBOOT_SECURITYNEGOTIATION) {
-		ISBOOT_TRACE("update security\n");
+		ISBOOT_TRACE(ISBOOT_LVL_DEBUG, "update security\n");
 		error = isboot_update_security(sess, pp);
 		if (error) {
 			ISBOOT_ERROR("update security error\n");
@@ -1821,7 +1824,7 @@ next_loginpdu:
 			return (error);
 		}
 	} else {
-		ISBOOT_TRACE("update option\n");
+		ISBOOT_TRACE(ISBOOT_LVL_DEBUG, "update option\n");
 		error = isboot_update_option(sess, pp);
 		if (error) {
 			ISBOOT_ERROR("update option error\n");
@@ -1829,7 +1832,7 @@ next_loginpdu:
 			return (error);
 		}
 	}
-	ISBOOT_TRACE("rsp login\n");
+	ISBOOT_TRACE(ISBOOT_LVL_DEBUG, "rsp login\n");
 	error = isboot_rsp_login(sess, pp);
 	if (error) {
 		isboot_free_pdu(pp);
@@ -1838,7 +1841,7 @@ next_loginpdu:
 	mtx_lock_spin(&sess->sn_mtx);
 	sess->statsn++;
 	mtx_unlock_spin(&sess->sn_mtx);
-	ISBOOT_TRACE("free PDU\n");
+	ISBOOT_TRACE(ISBOOT_LVL_DEBUG, "free PDU\n");
 	isboot_free_pdu(pp);
 	if (sess->full_feature == 0) {
 		xcnt++;
@@ -1859,7 +1862,7 @@ next_loginpdu:
 		    strcasecmp(sess->opt.dataDigest, "CRC32C") == 0)
 			sess->data_digest = 1;
 	}
-	ISBOOT_TRACE("login end\n");
+	ISBOOT_TRACE(ISBOOT_LVL_INFO, "login end\n");
 	return (0);
 }
 
@@ -1872,7 +1875,7 @@ isboot_cam_set_devices(struct isboot_sess *sess)
 	int lun, luns;
 	int i;
 
-	ISBOOT_TRACE("set devices on bus%d\n", cam_sim_path(sess->sim));
+	ISBOOT_TRACE(ISBOOT_LVL_INFO, "set devices on bus%d\n", cam_sim_path(sess->sim));
 	target_id = 0;
 	lun = sess->lun;
 	luns = 0;
@@ -1906,7 +1909,7 @@ isboot_cam_set_devices(struct isboot_sess *sess)
 					    ccb.cgdl.unit_number);
 				}
 			}
-			ISBOOT_TRACE("found device=%s%d@lun=%d\n",
+			ISBOOT_TRACE(ISBOOT_LVL_WARN, "found device=%s%d@lun=%d\n",
 			    ccb.cgdl.periph_name,
 			    ccb.cgdl.unit_number,
 			    (int)ccb.ccb_h.target_lun);
@@ -1923,7 +1926,7 @@ isboot_cam_set_devices(struct isboot_sess *sess)
 			ccb.crs.openings = 1;
 		xpt_action(&ccb);
 		if ((ccb.ccb_h.status & CAM_STATUS_MASK) != CAM_REQ_CMP) {
-			ISBOOT_TRACE("XPT error\n");
+			ISBOOT_TRACE(ISBOOT_LVL_DEBUG, "XPT error\n");
 		}
 		xpt_free_path(path);
 	}
@@ -1946,7 +1949,7 @@ isboot_scsi_io(struct cam_sim *sim, union ccb *ccb)
 	int I_bit, F_bit, R_bit, W_bit, Attr_bit;
 	int error;
 
-	ISBOOT_TRACE("isboot scsi io\n");
+	ISBOOT_TRACE(ISBOOT_LVL_DEBUG, "isboot scsi io\n");
 	sess = (struct isboot_sess *)cam_sim_softc(sim);
 	mtx_unlock(&sess->cam_mtx);
 
@@ -2029,7 +2032,7 @@ isboot_scsi_io(struct cam_sim *sim, union ccb *ccb)
 		mtx_lock(&sess->cam_mtx);
 		ISBOOT_ERROR("taskq alloc error\n");
 		ccb->ccb_h.status = CAM_REQ_CMP_ERR;
-		ISBOOT_TRACE("xpt_done %x\n", ccb->ccb_h.status);
+		ISBOOT_TRACE(ISBOOT_LVL_DEBUG, "xpt_done %x\n", ccb->ccb_h.status);
 		xpt_done(ccb);
 		return (ENOMEM);
 	}
@@ -2038,13 +2041,13 @@ isboot_scsi_io(struct cam_sim *sim, union ccb *ccb)
 	taskp->ccb = NULL;
 
 	mtx_lock(&sess->task_mtx);
-	ISBOOT_TRACE("add ccb\n");
+	ISBOOT_TRACE(ISBOOT_LVL_DEBUG, "add ccb\n");
 	TAILQ_INSERT_TAIL(&sess->taskq, taskp, tasks);
 	mtx_unlock(&sess->task_mtx);
 	if (sess->cam_qfreeze != 0) {
 		mtx_lock(&sess->cam_mtx);
 		/* XXX should be removed in main thread */
-		ISBOOT_TRACE("added ccb, qfreeze!=0\n");
+		ISBOOT_TRACE(ISBOOT_LVL_DEBUG, "added ccb, qfreeze!=0\n");
 		taskp->ccb = ccb;
 		return (0);
 	}
@@ -2120,7 +2123,7 @@ isboot_scsi_io(struct cam_sim *sim, union ccb *ccb)
 static void
 isboot_action(struct cam_sim *sim, union ccb *ccb)
 {
-	ISBOOT_TRACE("isboot action %x\n", ccb->ccb_h.func_code);
+	ISBOOT_TRACE(ISBOOT_LVL_DEBUG, "isboot action %x\n", ccb->ccb_h.func_code);
 
 	switch (ccb->ccb_h.func_code) {
 	case XPT_SCSI_IO:
@@ -2138,8 +2141,8 @@ isboot_action(struct cam_sim *sim, union ccb *ccb)
 	{
 		struct ccb_calc_geometry *ccg = &ccb->ccg;
 
-		ISBOOT_TRACE("XPT_CALC_GEOMETRY\n");
-		ISBOOT_TRACE("target=%d, lun=%d vsize=%d, bsize=%d\n",
+		ISBOOT_TRACE(ISBOOT_LVL_INFO, "XPT_CALC_GEOMETRY\n");
+		ISBOOT_TRACE(ISBOOT_LVL_INFO, "target=%d, lun=%d vsize=%d, bsize=%d\n",
 		    ccb->ccb_h.target_id, (int)ccb->ccb_h.target_lun,
 		    (int)ccg->volume_size, (int)ccg->block_size);
 		cam_calc_geometry(ccg, /*extended*/1);
@@ -2194,7 +2197,7 @@ isboot_action(struct cam_sim *sim, union ccb *ccb)
 		break;
 	}
 	xpt_done(ccb);
-	ISBOOT_TRACE("isboot action %x done\n", ccb->ccb_h.func_code);
+	ISBOOT_TRACE(ISBOOT_LVL_DEBUG, "isboot action %x done\n", ccb->ccb_h.func_code);
 }
 
 static void
@@ -2204,7 +2207,7 @@ isboot_poll(struct cam_sim *sim)
 
 	if (poll_out == 0) {
 		poll_out = 1;
-		ISBOOT_TRACE("isboot poll\n");
+		ISBOOT_TRACE(ISBOOT_LVL_DEBUG, "isboot poll\n");
 	}
 	/* called after crash dump */
 	/* XXX need flush? */
@@ -2217,7 +2220,7 @@ isboot_cam_attach(struct isboot_sess *sess)
 	struct cam_sim *sim;
 	int maxq = 255;
 
-	ISBOOT_TRACE("cam attach\n");
+	ISBOOT_TRACE(ISBOOT_LVL_INFO, "cam attach\n");
 
 	/* device queue */
 	devq = cam_simq_alloc(maxq);
@@ -2259,7 +2262,7 @@ isboot_cam_attach(struct isboot_sess *sess)
 	sess->sim = sim;
 	mtx_unlock(&sess->cam_mtx);
 
-	ISBOOT_TRACE("cam attach end\n");
+	ISBOOT_TRACE(ISBOOT_LVL_INFO, "cam attach end\n");
 	return (0);
 }
 
@@ -2267,7 +2270,7 @@ static int
 isboot_cam_dettach(struct isboot_sess *sess)
 {
 
-	ISBOOT_TRACE("cam dettach\n");
+	ISBOOT_TRACE(ISBOOT_LVL_INFO, "cam dettach\n");
 
 	mtx_lock(&sess->cam_mtx);
 	if (sess->sim != NULL) {
@@ -2280,7 +2283,7 @@ isboot_cam_dettach(struct isboot_sess *sess)
 	}
 	mtx_unlock(&sess->cam_mtx);
 
-	ISBOOT_TRACE("cam dettach end\n");
+	ISBOOT_TRACE(ISBOOT_LVL_INFO, "cam dettach end\n");
 	return (0);
 }
 
@@ -2289,7 +2292,7 @@ isboot_cam_rescan_done(struct cam_periph *periph, union ccb *ccb)
 {
 	struct isboot_sess *sess;
 
-	ISBOOT_TRACE("cam rescan done\n");
+	ISBOOT_TRACE(ISBOOT_LVL_INFO, "cam rescan done\n");
 	sess = (struct isboot_sess *)ccb->ccb_h.spriv_ptr0;
 	sess->cam_rescan_done = 1;
 	sess->cam_rescan_in_progress = 0;
@@ -2306,7 +2309,7 @@ isboot_cam_rescan(struct isboot_sess *sess)
 	 * you must prepare receiver before calling it
 	 * and should not block here (main thread)
 	 */
-	ISBOOT_TRACE("cam rescan\n");
+	ISBOOT_TRACE(ISBOOT_LVL_INFO, "cam rescan\n");
 	ccb = xpt_alloc_ccb();
 	mtx_lock(&sess->cam_mtx);
 	if (sess->sim != NULL && sess->path != NULL) {
@@ -2328,7 +2331,7 @@ isboot_cam_rescan(struct isboot_sess *sess)
 	mtx_unlock(&sess->cam_mtx);
 	if (ccb != NULL)
 		xpt_free_ccb(ccb);
-	ISBOOT_TRACE("cam rescan end\n");
+	ISBOOT_TRACE(ISBOOT_LVL_INFO, "cam rescan end\n");
 	return (0);
 }
 
@@ -2336,7 +2339,7 @@ static void
 isboot_destroy_sess(struct isboot_sess *sess)
 {
 
-	ISBOOT_TRACE("isboot destroy session\n");
+	ISBOOT_TRACE(ISBOOT_LVL_INFO, "isboot destroy session\n");
 	if (sess == NULL)
 		return;
 	if (sess->so != NULL) {
@@ -2417,7 +2420,7 @@ isboot_initialize_session(struct isboot_sess *sess)
 {
 	int error = 0;
 
-	ISBOOT_TRACE("initialize session, thread id=%x\n", curthread->td_tid);
+	ISBOOT_TRACE(ISBOOT_LVL_INFO, "initialize session, thread id=%x\n", curthread->td_tid);
 	sess->td = curthread;
 	strlcpy(sess->initiator_name, (char *)isboot_initiator_name,
 	    ISBOOT_NAME_MAX);
@@ -2429,9 +2432,9 @@ isboot_initialize_session(struct isboot_sess *sess)
 	sess->port = isboot_target_port;
 	sess->lun = isboot_target_lun;
 
-	ISBOOT_TRACE("Initiator: %s\n", isboot_initiator_name);
-	ISBOOT_TRACE("Target: %s\n", isboot_target_name);
-	ISBOOT_TRACE("Target IP=%s, Port=%u, LUN=%ju\n",
+	ISBOOT_TRACE(ISBOOT_LVL_DEBUG, "Initiator: %s\n", isboot_initiator_name);
+	ISBOOT_TRACE(ISBOOT_LVL_DEBUG, "Target: %s\n", isboot_target_name);
+	ISBOOT_TRACE(ISBOOT_LVL_DEBUG, "Target IP=%s, Port=%u, LUN=%ju\n",
 	    isboot_target_address_string, isboot_target_port,
 	    (intmax_t)isboot_target_lun);
 
@@ -2547,14 +2550,14 @@ isboot_start_session(struct isboot_sess *sess)
 	int error;
 
 	/* start iSCSI session */
-	ISBOOT_TRACE("isboot_connect\n");
+	ISBOOT_TRACE(ISBOOT_LVL_WARN, "isboot_connect\n");
 	error = isboot_connect(sess);
 	if (error) {
 		ISBOOT_ERROR("connect failed\n");
 		return (error);
 	}
 
-	ISBOOT_TRACE("isboot_do_login\n");
+	ISBOOT_TRACE(ISBOOT_LVL_WARN, "isboot_do_login\n");
 	error = isboot_do_login(sess);
 	if (error) {
 		ISBOOT_ERROR("do login failed\n");
@@ -2636,11 +2639,11 @@ isboot_rsp_scsi(struct isboot_sess *sess, pdu_t *pp)
 		sp = NULL;
 	}
 
-	ISBOOT_TRACE("CmdSN=%u, ExpStatSN=%u, StatSN=%u, ExpCmdSN=%u, "
+	ISBOOT_TRACE(ISBOOT_LVL_DEBUG, "CmdSN=%u, ExpStatSN=%u, StatSN=%u, ExpCmdSN=%u, "
 	    "MaxCmdSN=%u\n", sess->cmdsn, sess->statsn,
 	    StatSN, ExpCmdSN, MaxCmdSN);
-	ISBOOT_TRACE("ExpDataSN=%u\n", ExpDataSN);
-	ISBOOT_TRACE("o=%d, u=%d, O=%d, U=%d\n", o_bit, u_bit, O_bit, U_bit);
+	ISBOOT_TRACE(ISBOOT_LVL_DEBUG, "ExpDataSN=%u\n", ExpDataSN);
+	ISBOOT_TRACE(ISBOOT_LVL_DEBUG, "o=%d, u=%d, O=%d, U=%d\n", o_bit, u_bit, O_bit, U_bit);
 
 	ccb->csio.resid = 0;
 	if (O_bit)
@@ -2696,20 +2699,20 @@ isboot_rsp_scsi(struct isboot_sess *sess, pdu_t *pp)
 			break;
 		}
 		if (sense_len != 0) {
-			ISBOOT_TRACE("auto sense valid\n");
+			ISBOOT_TRACE(ISBOOT_LVL_DEBUG, "auto sense valid\n");
 			ccb->ccb_h.status |= CAM_AUTOSNS_VALID;
 		}
 	} else {
 		ccb->ccb_h.status = CAM_REQ_CMP_ERR;
 	}
 
-	ISBOOT_TRACE("xpt_done %x\n", ccb->ccb_h.status);
+	ISBOOT_TRACE(ISBOOT_LVL_DEBUG, "xpt_done %x\n", ccb->ccb_h.status);
 	mtx_lock(&sess->cam_mtx);
 	xpt_done(ccb);
 	mtx_unlock(&sess->cam_mtx);
 
 	mtx_lock(&sess->task_mtx);
-	ISBOOT_TRACE("remove ccb ITT=%x\n", taskp->ITT);
+	ISBOOT_TRACE(ISBOOT_LVL_DEBUG, "remove ccb ITT=%x\n", taskp->ITT);
 	TAILQ_REMOVE(&sess->taskq, taskp, tasks);
 	wakeup(&sess->taskq);
 	mtx_unlock(&sess->task_mtx);
@@ -2789,12 +2792,12 @@ isboot_rsp_read_data(struct isboot_sess *sess, pdu_t *pp)
 		return (EINVAL);
 	}
 
-	ISBOOT_TRACE("CmdSN=%u, ExpStatSN=%u, StatSN=%u, ExpCmdSN=%u, "
+	ISBOOT_TRACE(ISBOOT_LVL_DEBUG, "CmdSN=%u, ExpStatSN=%u, StatSN=%u, ExpCmdSN=%u, "
 	    "MaxCmdSN=%u\n", sess->cmdsn, sess->statsn,
 	    StatSN, ExpCmdSN, MaxCmdSN);
 
-	ISBOOT_TRACE("F=%d, S=%d, O=%d, U=%d\n", F_bit, S_bit, O_bit, U_bit);
-	ISBOOT_TRACE("TL=%d, offset=%d, len=%d\n", TL, offset, len);
+	ISBOOT_TRACE(ISBOOT_LVL_DEBUG, "F=%d, S=%d, O=%d, U=%d\n", F_bit, S_bit, O_bit, U_bit);
+	ISBOOT_TRACE(ISBOOT_LVL_DEBUG, "TL=%d, offset=%d, len=%d\n", TL, offset, len);
 	memcpy(data + offset, pp->ds_addr, ISCSI_ALIGN(pp->ds_len));
 	/* ExpDataSN++; */
 
@@ -2848,14 +2851,14 @@ isboot_rsp_read_data(struct isboot_sess *sess, pdu_t *pp)
 		} else {
 			ccb->ccb_h.status = CAM_REQ_CMP_ERR;
 		}
-		ISBOOT_TRACE("xpt_done %x\n", ccb->ccb_h.status);
+		ISBOOT_TRACE(ISBOOT_LVL_DEBUG, "xpt_done %x\n", ccb->ccb_h.status);
 		mtx_lock(&sess->cam_mtx);
 		xpt_done(ccb);
 		mtx_unlock(&sess->cam_mtx);
 	}
 	if (F_bit & S_bit) {
 		mtx_lock(&sess->task_mtx);
-		ISBOOT_TRACE("remove ccb ITT=%x\n", taskp->ITT);
+		ISBOOT_TRACE(ISBOOT_LVL_DEBUG, "remove ccb ITT=%x\n", taskp->ITT);
 		TAILQ_REMOVE(&sess->taskq, taskp, tasks);
 		wakeup(&sess->taskq);
 		mtx_unlock(&sess->task_mtx);
@@ -2938,11 +2941,11 @@ isboot_rsp_r2t(struct isboot_sess *sess, pdu_t *pp)
 	if (data_pdu.ds_addr == NULL)
 		return (ENOMEM);
 
-	ISBOOT_TRACE("CmdSN=%u, ExpStatSN=%u, StatSN=%u, ExpCmdSN=%u, "
+	ISBOOT_TRACE(ISBOOT_LVL_DEBUG, "CmdSN=%u, ExpStatSN=%u, StatSN=%u, ExpCmdSN=%u, "
 	    "MaxCmdSN=%u\n", sess->cmdsn, sess->statsn,
 	    StatSN, ExpCmdSN, MaxCmdSN);
 
-	ISBOOT_TRACE("TL=%d, offset=%d, len=%d\n", TL, offset, transfer_len);
+	ISBOOT_TRACE(ISBOOT_LVL_DEBUG, "TL=%d, offset=%d, len=%d\n", TL, offset, transfer_len);
 	while ((transfer_len - len) > 0) {
 		ds_len = min(transfer_len - len, segment_len);
 		memcpy(data_pdu.ds_addr, data + offset, ds_len);
@@ -2968,7 +2971,7 @@ isboot_rsp_r2t(struct isboot_sess *sess, pdu_t *pp)
 		offset += ds_len;
 		error = isboot_xmit_pdu(sess, &data_pdu);
 		if (error) {
-			ISBOOT_TRACE("R2T transfer error\n");
+			ISBOOT_TRACE(ISBOOT_LVL_DEBUG, "R2T transfer error\n");
 			isboot_free_pdu(&data_pdu);
 			return (error);
 		}
@@ -3016,7 +3019,7 @@ isboot_send_nopout(struct isboot_sess *sess, pdu_t *pp, uint32_t *TTT_in)
 	}
 	mtx_unlock_spin(&sess->sn_mtx);
 
-	ISBOOT_TRACE("NOP OUT ITT=0x%x, TTT=0x%x\n", ITT, TTT);
+	ISBOOT_TRACE(ISBOOT_LVL_DEBUG, "NOP OUT ITT=0x%x, TTT=0x%x\n", ITT, TTT);
 	error = isboot_xmit_pdu(sess, pp);
 	if (error) {
 		isboot_free_pdu(pp);
@@ -3041,14 +3044,14 @@ isboot_rsp_nopin(struct isboot_sess *sess, pdu_t *pp)
 	ExpCmdSN = DGET32(&rsp[28]);
 	MaxCmdSN = DGET32(&rsp[32]);
 
-	ISBOOT_TRACE("CmdSN=%u, ExpStatSN=%u, StatSN=%u, ExpCmdSN=%u, "
+	ISBOOT_TRACE(ISBOOT_LVL_DEBUG, "CmdSN=%u, ExpStatSN=%u, StatSN=%u, ExpCmdSN=%u, "
 	    "MaxCmdSN=%u\n", sess->cmdsn, sess->statsn,
 	    StatSN, ExpCmdSN, MaxCmdSN);
 
 	/* target initiated */
 	if (TTT == 0xffffffffU) {
 		/* response is unnecessary */
-		ISBOOT_TRACE("TTT=0xffffffff\n");
+		ISBOOT_TRACE(ISBOOT_LVL_DEBUG, "TTT=0xffffffff\n");
 		/* 10.19.2 */
 		if (ITT != 0xffffffffU) {
 			mtx_lock_spin(&sess->sn_mtx);
@@ -3087,61 +3090,61 @@ isboot_execute(struct isboot_sess *sess, pdu_t *pp)
 
 	opcode = BGET8W(&bhs[0], 5, 6);
 
-	ISBOOT_TRACE("isboot_execute opcode=0x%x\n", opcode);
+	ISBOOT_TRACE(ISBOOT_LVL_DEBUG, "isboot_execute opcode=0x%x\n", opcode);
 	switch (opcode) {
 	case ISCSI_OP_NOP_IN:
-		ISBOOT_TRACE("NOP IN\n");
+		ISBOOT_TRACE(ISBOOT_LVL_DEBUG, "NOP IN\n");
 		rc = isboot_rsp_nopin(sess, pp);
 		if (rc != 0) {
 			return (rc);
 		}
 		break;
 	case ISCSI_OP_SCSI_RSP:
-		ISBOOT_TRACE("SCSI RSP\n");
+		ISBOOT_TRACE(ISBOOT_LVL_DEBUG, "SCSI RSP\n");
 		rc = isboot_rsp_scsi(sess, pp);
 		if (rc != 0) {
 			return (rc);
 		}
 		break;
 	case ISCSI_OP_TASK_RSP:
-		ISBOOT_TRACE("TASK RSP\n");
+		ISBOOT_TRACE(ISBOOT_LVL_DEBUG, "TASK RSP\n");
 		goto error_out;
 		break;
 	case ISCSI_OP_LOGIN_RSP:
-		ISBOOT_TRACE("LOGIN RSP\n");
+		ISBOOT_TRACE(ISBOOT_LVL_DEBUG, "LOGIN RSP\n");
 		goto error_out;
 		break;
 	case ISCSI_OP_TEXT_RSP:
-		ISBOOT_TRACE("TEXT RSP\n");
+		ISBOOT_TRACE(ISBOOT_LVL_DEBUG, "TEXT RSP\n");
 		goto error_out;
 		break;
 	case ISCSI_OP_READ_DATA:
-		ISBOOT_TRACE("READ DATA\n");
+		ISBOOT_TRACE(ISBOOT_LVL_DEBUG, "READ DATA\n");
 		rc = isboot_rsp_read_data(sess, pp);
 		if (rc != 0) {
 			return (rc);
 		}
 		break;
 	case ISCSI_OP_LOGOUT_RSP:
-		ISBOOT_TRACE("LOGOUT RSP\n");
+		ISBOOT_TRACE(ISBOOT_LVL_DEBUG, "LOGOUT RSP\n");
 		goto error_out;
 		break;
 	case ISCSI_OP_R2T:
-		ISBOOT_TRACE("R2T\n");
+		ISBOOT_TRACE(ISBOOT_LVL_DEBUG, "R2T\n");
 		rc = isboot_rsp_r2t(sess, pp);
 		if (rc != 0) {
 			return (rc);
 		}
 		break;
 	case ISCSI_OP_ASYNC_MSG:
-		ISBOOT_TRACE("ASYNC\n");
+		ISBOOT_TRACE(ISBOOT_LVL_DEBUG, "ASYNC\n");
 		goto error_out;
 	case ISCSI_OP_REJECT:
-		ISBOOT_TRACE("REJECT\n");
+		ISBOOT_TRACE(ISBOOT_LVL_DEBUG, "REJECT\n");
 		goto error_out;
 	default:
 	error_out:
-		ISBOOT_TRACE("unsupported opcode %x\n", pp->ipdu.bhs.opcode);
+		ISBOOT_TRACE(ISBOOT_LVL_DEBUG, "unsupported opcode %x\n", pp->ipdu.bhs.opcode);
 		return (EOPNOTSUPP);
 	}
 	return (0);
@@ -3156,7 +3159,7 @@ isboot_peek_bhs(struct isboot_sess *sess, int *resid)
 	int flags;
 	int len;
 
-	ISBOOT_TRACE("peek BHS\n");
+	ISBOOT_TRACE(ISBOOT_LVL_DEBUG, "peek BHS\n");
 	if(sess->so == NULL)
 		return (EINVAL);
 
@@ -3180,7 +3183,7 @@ isboot_peek_bhs(struct isboot_sess *sess, int *resid)
 	*resid = uio.uio_resid;
 	if (uio.uio_resid == len) {
 		/* EOF */
-		ISBOOT_TRACE("EOF\n");
+		ISBOOT_TRACE(ISBOOT_LVL_DEBUG, "EOF\n");
 		return (EPIPE);
 	}
 	return (0);
@@ -3196,7 +3199,7 @@ isboot_mainloop(void *arg)
 	int error = 0;
 	int resid;
 
-	ISBOOT_TRACE("main loop, thread id=%x\n", curthread->td_tid);
+	ISBOOT_TRACE(ISBOOT_LVL_DEBUG, "main loop, thread id=%x\n", curthread->td_tid);
 
 	/* initialize session structure, mutex, etc */
 	error = isboot_initialize_session(sess);
@@ -3210,7 +3213,7 @@ isboot_mainloop(void *arg)
 		error = isboot_start_session(sess);
 		if (error) {
 			if (retry-- >= 0) {
-				ISBOOT_TRACE("boot retry (%d)\n", retry);
+				ISBOOT_TRACE(ISBOOT_LVL_WARN, "boot retry (%d)\n", retry);
 				tsleep(&sess->so, PSOCK, "isboot",
 				    1 * hz);
 				continue;
@@ -3247,7 +3250,7 @@ isboot_mainloop(void *arg)
 	}
 
 	/* ready for doing full feature */
-	ISBOOT_TRACE("going to full feature phase\n");
+	ISBOOT_TRACE(ISBOOT_LVL_WARN, "going to full feature phase\n");
 	for (;;) {
 		/* to unload, stop request? */
 		if (isboot_stop_flag != 0)
@@ -3256,7 +3259,7 @@ isboot_mainloop(void *arg)
 		/* first check BHS */
 		error = isboot_peek_bhs(sess, &resid);
 		if (error) {
-			ISBOOT_TRACE("peek_bhs error=%d, state=%d/%d\n",
+			ISBOOT_TRACE(ISBOOT_LVL_DEBUG, "peek_bhs error=%d, state=%d/%d\n",
 			    error, sess->so->so_state, sess->so->so_error);
 			if (error == EAGAIN) {
 				/* timeout */
@@ -3275,7 +3278,7 @@ isboot_mainloop(void *arg)
 			}
 			/* at least BHS size, try to recv */
 			memset(&pdu, 0, sizeof(pdu));
-			ISBOOT_TRACE("recv PDU\n");
+			ISBOOT_TRACE(ISBOOT_LVL_DEBUG, "recv PDU\n");
 			error = isboot_recv_pdu(sess, &pdu);
 			if (error) {
 				isboot_free_pdu(&pdu);
@@ -3297,7 +3300,7 @@ isboot_mainloop(void *arg)
 			int wait, retry;
 		do_recovery:
 			/* starting retry phase (session recovery) */
-			ISBOOT_TRACE("socket down\n");
+			ISBOOT_TRACE(ISBOOT_LVL_WARN, "socket down\n");
 			wait = sess->opt.defaultTime2Wait;
 			retry = 9999; /* XXX */
 			error = 0;
@@ -3325,11 +3328,11 @@ isboot_mainloop(void *arg)
 					if (ccb != NULL) {
 						ccb->ccb_h.status
 							= CAM_REQUEUE_REQ;
-						ISBOOT_TRACE("xpt_done %x\n",
+						ISBOOT_TRACE(ISBOOT_LVL_DEBUG, "xpt_done %x\n",
 						    ccb->ccb_h.status);
 						xpt_done(ccb);
 					}
-					ISBOOT_TRACE("remove ccb ITT=%x\n",
+					ISBOOT_TRACE(ISBOOT_LVL_DEBUG, "remove ccb ITT=%x\n",
 					    taskp->ITT);
 					TAILQ_REMOVE(&sess->taskq, taskp,
 					    tasks);
@@ -3339,7 +3342,7 @@ isboot_mainloop(void *arg)
 				mtx_unlock(&sess->task_mtx);
 
 				/* stop current socket */
-				ISBOOT_TRACE("stop...\n");
+				ISBOOT_TRACE(ISBOOT_LVL_DEBUG, "stop...\n");
 				error = isboot_stop(sess);
 				if (error) {
 					ISBOOT_ERROR("stop error\n");
@@ -3347,18 +3350,18 @@ isboot_mainloop(void *arg)
 				}
 
 				/* wait for reconnecting */
-				ISBOOT_TRACE("wait...(%d sec.)\n", wait);
+				ISBOOT_TRACE(ISBOOT_LVL_WARN, "wait...(%d sec.)\n", wait);
 				tsleep(&sess->so, PSOCK, "isboot",
 				    wait * hz);
 
 				/* try to reconnect */
-				ISBOOT_TRACE("reconnect...\n");
+				ISBOOT_TRACE(ISBOOT_LVL_WARN, "reconnect...\n");
 				error = isboot_start_session(sess);
 				if (error) {
-					ISBOOT_TRACE("can't restart\n");
+					ISBOOT_TRACE(ISBOOT_LVL_WARN, "can't restart\n");
 					if (wait == 0) {
 						/* XXX nowait maybe fast? */
-						ISBOOT_TRACE("force sleep "
+						ISBOOT_TRACE(ISBOOT_LVL_WARN, "force sleep "
 						    "retry\n");
 						tsleep(&sess->so, PSOCK,
 						    "isboot", 1 * hz);
@@ -3401,7 +3404,7 @@ isboot_mainloop(void *arg)
 	isboot_cam_dettach(sess);
 	isboot_destroy_sess(sess);
 
-	ISBOOT_TRACE("main loop end\n");
+	ISBOOT_TRACE(ISBOOT_LVL_DEBUG, "main loop end\n");
 	return (0);
 }
 
@@ -3412,7 +3415,7 @@ isboot_iscsi(void *arg)
 	int error;
 
 	isboot_iscsi_running = 1;
-	ISBOOT_TRACE("isboot iscsi start, thread id=%x\n", curthread->td_tid);
+	ISBOOT_TRACE(ISBOOT_LVL_INFO, "isboot iscsi start, thread id=%x\n", curthread->td_tid);
 	error = sys_setsid(curthread, NULL);
 	if (error) {
 		ISBOOT_ERROR("setsid error (%d)\n", error);
@@ -3424,7 +3427,7 @@ isboot_iscsi(void *arg)
 		ISBOOT_ERROR("isboot iscsi error (%d)\n", error);
 	}
 
-	ISBOOT_TRACE("isboot iscsi end, thread id=%x\n", curthread->td_tid);
+	ISBOOT_TRACE(ISBOOT_LVL_INFO, "isboot iscsi end, thread id=%x\n", curthread->td_tid);
 	isboot_iscsi_running = 0;
 	kproc_exit(0);
 }
@@ -3434,12 +3437,12 @@ isboot_kproc(void)
 {
 	struct isboot_sess *sess = &isboot_g_sess;
 
-	ISBOOT_TRACE("isboot kproc start, thread id=%x\n", curthread->td_tid);
+	ISBOOT_TRACE(ISBOOT_LVL_INFO, "isboot kproc start, thread id=%x\n", curthread->td_tid);
 
 	/* wrapper */
 	isboot_iscsi(sess);
 
-	ISBOOT_TRACE("isboot kproc end, thread id=%x\n", curthread->td_tid);
+	ISBOOT_TRACE(ISBOOT_LVL_INFO, "isboot kproc end, thread id=%x\n", curthread->td_tid);
 }
 
 int
@@ -3450,7 +3453,7 @@ isboot_iscsi_start(void)
 	int error;
 	int retry;
 
-	ISBOOT_TRACE("isboot start, thread id=%x\n", curthread->td_tid);
+	ISBOOT_TRACE(ISBOOT_LVL_INFO, "isboot start, thread id=%x\n", curthread->td_tid);
 	memset(sess, 0, sizeof(*sess));
 	sess->td = curthread;
 	sess->so = NULL;
@@ -3462,7 +3465,7 @@ isboot_iscsi_start(void)
 	kproc.arg0 = "isboot";
 	kproc.func = isboot_kproc;
 	kproc.global_procpp = &sess->pp;
-	ISBOOT_TRACE("kproc_start\n");
+	ISBOOT_TRACE(ISBOOT_LVL_INFO, "kproc_start\n");
 	kproc_start(&kproc);
 
 	printf("Attempting to login to iSCSI target and scan all LUNs.\n");
@@ -3480,7 +3483,7 @@ isboot_iscsi_start(void)
 	    sess->cam_device_installed == 0) {
 		error = isboot_cam_set_devices(sess);
 		if (error == 0) {
-			ISBOOT_TRACE("no CAM device\n");
+			ISBOOT_TRACE(ISBOOT_LVL_WARN, "no CAM device\n");
 		} else {
 			if (strlen(isboot_boot_device) != 0) {
 				/* the boot device from iBFT is here */
@@ -3516,7 +3519,7 @@ isboot_iscsi_device_init(void *arg)
 	    sess->cam_device_installed == 0) {
 		error = isboot_cam_set_devices(sess);
 		if (error == 0) {
-			ISBOOT_TRACE("no CAM device\n");
+			ISBOOT_TRACE(ISBOOT_LVL_WARN, "no CAM device\n");
 		} else {
 			if (strlen(isboot_boot_device) != 0) {
 				/* the boot device from iBFT is here */
