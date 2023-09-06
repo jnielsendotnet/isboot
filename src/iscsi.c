@@ -1902,14 +1902,14 @@ isboot_cam_set_devices(struct isboot_sess *sess)
 			luns++;
 			if (ccb.ccb_h.target_lun == lun) {
 				if (strcasecmp(ccb.cgdl.periph_name,
-					"pass") != 0) {
+					"da") == 0) {
 					snprintf(isboot_boot_device,
 					    sizeof(isboot_boot_device),
 					    "%s%d", ccb.cgdl.periph_name,
 					    ccb.cgdl.unit_number);
 				}
 			}
-			ISBOOT_TRACE(ISBOOT_LVL_WARN, "found device=%s%d@lun=%d\n",
+			ISBOOT_TRACE(ISBOOT_LVL_INFO, "found device=%s%d@lun=%d\n",
 			    ccb.cgdl.periph_name,
 			    ccb.cgdl.unit_number,
 			    (int)ccb.ccb_h.target_lun);
@@ -2220,7 +2220,7 @@ isboot_cam_attach(struct isboot_sess *sess)
 	struct cam_sim *sim;
 	int maxq = 255;
 
-	ISBOOT_TRACE(ISBOOT_LVL_INFO, "cam attach\n");
+	ISBOOT_TRACE(ISBOOT_LVL_WARN, "cam attach\n");
 
 	/* device queue */
 	devq = cam_simq_alloc(maxq);
@@ -2262,15 +2262,15 @@ isboot_cam_attach(struct isboot_sess *sess)
 	sess->sim = sim;
 	mtx_unlock(&sess->cam_mtx);
 
-	ISBOOT_TRACE(ISBOOT_LVL_INFO, "cam attach end\n");
+	ISBOOT_TRACE(ISBOOT_LVL_WARN, "cam attach end\n");
 	return (0);
 }
 
 static int
-isboot_cam_dettach(struct isboot_sess *sess)
+isboot_cam_detach(struct isboot_sess *sess)
 {
 
-	ISBOOT_TRACE(ISBOOT_LVL_INFO, "cam dettach\n");
+	ISBOOT_TRACE(ISBOOT_LVL_WARN, "cam detach\n");
 
 	mtx_lock(&sess->cam_mtx);
 	if (sess->sim != NULL) {
@@ -2283,7 +2283,7 @@ isboot_cam_dettach(struct isboot_sess *sess)
 	}
 	mtx_unlock(&sess->cam_mtx);
 
-	ISBOOT_TRACE(ISBOOT_LVL_INFO, "cam dettach end\n");
+	ISBOOT_TRACE(ISBOOT_LVL_WARN, "cam detach end\n");
 	return (0);
 }
 
@@ -2292,7 +2292,7 @@ isboot_cam_rescan_done(struct cam_periph *periph, union ccb *ccb)
 {
 	struct isboot_sess *sess;
 
-	ISBOOT_TRACE(ISBOOT_LVL_INFO, "cam rescan done\n");
+	ISBOOT_TRACE(ISBOOT_LVL_WARN, "cam rescan done\n");
 	sess = (struct isboot_sess *)ccb->ccb_h.spriv_ptr0;
 	sess->cam_rescan_done = 1;
 	sess->cam_rescan_in_progress = 0;
@@ -2309,7 +2309,7 @@ isboot_cam_rescan(struct isboot_sess *sess)
 	 * you must prepare receiver before calling it
 	 * and should not block here (main thread)
 	 */
-	ISBOOT_TRACE(ISBOOT_LVL_INFO, "cam rescan\n");
+	ISBOOT_TRACE(ISBOOT_LVL_WARN, "cam rescan\n");
 	ccb = xpt_alloc_ccb();
 	mtx_lock(&sess->cam_mtx);
 	if (sess->sim != NULL && sess->path != NULL) {
@@ -2331,7 +2331,7 @@ isboot_cam_rescan(struct isboot_sess *sess)
 	mtx_unlock(&sess->cam_mtx);
 	if (ccb != NULL)
 		xpt_free_ccb(ccb);
-	ISBOOT_TRACE(ISBOOT_LVL_INFO, "cam rescan end\n");
+	ISBOOT_TRACE(ISBOOT_LVL_WARN, "cam rescan end\n");
 	return (0);
 }
 
@@ -3242,7 +3242,7 @@ isboot_mainloop(void *arg)
 	error = isboot_cam_rescan(sess);
 	if (error) {
 		ISBOOT_ERROR("cam rescan error\n");
-		isboot_cam_dettach(sess);
+		isboot_cam_detach(sess);
 		isboot_stop(sess);
 		isboot_close(sess);
 		isboot_destroy_sess(sess);
@@ -3401,7 +3401,7 @@ isboot_mainloop(void *arg)
 	/* cleanup */
 	isboot_stop(sess);
 	isboot_close(sess);
-	isboot_cam_dettach(sess);
+	isboot_cam_detach(sess);
 	isboot_destroy_sess(sess);
 
 	ISBOOT_TRACE(ISBOOT_LVL_DEBUG, "main loop end\n");
