@@ -1885,7 +1885,7 @@ isboot_cam_set_devices(struct isboot_sess *sess)
 			continue;
 		}
 		memset(&ccb, 0, sizeof(ccb));
-		xpt_setup_ccb(&ccb.ccb_h, path, /* priority */1);
+		xpt_setup_ccb(&ccb.ccb_h, path, CAM_PRIORITY_XPT);
 		ccb.ccb_h.func_code = XPT_GDEVLIST;
 		ccb.ccb_h.flags = CAM_DIR_NONE;
 		ccb.ccb_h.retry_count = 1;
@@ -1913,7 +1913,7 @@ isboot_cam_set_devices(struct isboot_sess *sess)
 		}
 
 		memset(&ccb, 0, sizeof(ccb));
-		xpt_setup_ccb(&ccb.ccb_h, path, /* priority */1);
+		xpt_setup_ccb(&ccb.ccb_h, path, CAM_PRIORITY_NONE);
 		ccb.ccb_h.func_code = XPT_REL_SIMQ;
 		ccb.ccb_h.flags = CAM_DEV_QFREEZE;
 		ccb.crs.release_flags = RELSIM_ADJUST_OPENINGS;
@@ -2311,7 +2311,7 @@ isboot_cam_rescan(struct isboot_sess *sess)
 	mtx_lock(&sess->cam_mtx);
 	if (sess->sim != NULL && sess->path != NULL) {
 		xpt_path_lock(sess->path);
-		xpt_setup_ccb(&ccb->ccb_h, sess->path, /*priority*/5);
+		xpt_setup_ccb(&ccb->ccb_h, sess->path, CAM_PRIORITY_XPT);
 		ccb->ccb_h.func_code = XPT_SCAN_BUS;
 		ccb->ccb_h.target_id = CAM_TARGET_WILDCARD;
 		ccb->ccb_h.target_lun = CAM_LUN_WILDCARD;
