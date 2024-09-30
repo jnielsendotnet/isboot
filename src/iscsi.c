@@ -1962,7 +1962,7 @@ isboot_scsi_io(struct isboot_sess *sess, union ccb *ccb)
 	int I_bit, F_bit, R_bit, W_bit, Attr_bit;
 	int error;
 
-	ISBOOT_TRACE("isboot scsi io\n");
+	ISBOOT_TRACE(ISBOOT_LVL_DEBUG, "isboot scsi io\n");
 
 	csio = &ccb->csio;
 	ccb_h = &ccb->ccb_h;
@@ -2011,7 +2011,7 @@ isboot_scsi_io(struct isboot_sess *sess, union ccb *ccb)
 		if (pdu.ahs_addr == NULL) {
 			ISBOOT_ERROR("isboot_malloc_pdubuf out of memory\n");
 			ccb->ccb_h.status = CAM_REQ_CMP_ERR;
-			ISBOOT_TRACE("xpt_done %x\n", ccb->ccb_h.status);
+			ISBOOT_TRACE(ISBOOT_LVL_DEBUG, "xpt_done %x\n", ccb->ccb_h.status);
 			mtx_lock(&sess->cam_mtx);
 			xpt_done(ccb);
 			mtx_unlock(&sess->cam_mtx);
@@ -2092,7 +2092,7 @@ isboot_scsi_io(struct isboot_sess *sess, union ccb *ccb)
 		if (pdu.ds_addr == NULL) {
 			ISBOOT_ERROR("isboot_malloc_pdubuf out of memory\n");
 			ccb->ccb_h.status = CAM_REQ_CMP_ERR;
-			ISBOOT_TRACE("xpt_done %x\n", ccb->ccb_h.status);
+			ISBOOT_TRACE(ISBOOT_LVL_DEBUG, "xpt_done %x\n", ccb->ccb_h.status);
 			mtx_lock(&sess->cam_mtx);
 			xpt_done(ccb);
 			mtx_unlock(&sess->cam_mtx);
