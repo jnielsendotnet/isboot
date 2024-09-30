@@ -1,6 +1,6 @@
 /*-
- * Copyright (C) 2010-2015 Daisuke Aoyama <aoyama@peach.ne.jp>
- * All rights reserved.
+ * Copyright (c) 2010-2015 Daisuke Aoyama <aoyama@peach.ne.jp>
+ * Copyright (c) 2021-2023 John Nielsen <john@jnielsen.net>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -53,7 +53,7 @@ __FBSDID("$FreeBSD$");
 #include "ibft.h"
 #include "isboot.h"
 
-static char *isboot_driver_version = "0.2.15-alpha";
+static char *isboot_driver_version = "0.2.16-alpha";
 
 /* boot iSCSI initiator and target */
 uint8_t isboot_initiator_name[ISBOOT_NAME_MAX];
@@ -88,28 +88,31 @@ SYSCTL_UINT(_hw_ibft, OID_AUTO, target_port, CTLFLAG_RD, &isboot_target_port, 0,
 SYSCTL_QUAD(_hw_ibft, OID_AUTO, target_lun, CTLFLAG_RD, &isboot_target_lun, 0, "iBFT target lun");
 SYSCTL_UINT(_hw_ibft, OID_AUTO, nic_prefix, CTLFLAG_RD, &isboot_nic_prefix, 0, "iBFT nic prefix");
 SYSCTL_STRING(_hw_ibft, OID_AUTO, nic_gateway, CTLFLAG_RD, &isboot_nic_gateway_string, 0, "iBFT nic gateway");
+
+/* tunables */
+static u_int isboot_ibft_acpi_table = 1;
+TUNABLE_INT("hw.ibft.acpi_table", &isboot_ibft_acpi_table);
+SYSCTL_UINT(_hw_ibft, OID_AUTO, acpi_table, CTLFLAG_RDTUN, &isboot_ibft_acpi_table, 0, "ACPI table index for iBFT");
+u_int isboot_ibft_verbose = 0;
+TUNABLE_INT("hw.ibft.verbose", &isboot_ibft_verbose);
+SYSCTL_UINT(_hw_ibft, OID_AUTO, verbose, CTLFLAG_RDTUN, &isboot_ibft_verbose, 0, "Show verbose boot messages for iBFT");
+
 /* sysctl (isboot) */
 static struct sysctl_ctx_list isboot_clist;
 uint8_t isboot_boot_nic[ISBOOT_SYSCTL_STR_MAX];
 uint8_t isboot_boot_device[ISBOOT_SYSCTL_STR_MAX];
+u_int isboot_trace_level = 0;
+TUNABLE_INT("net.isboot.debug", &isboot_trace_level);
 
-/*#define DEBUG*/
-#ifdef DEBUG
-#define ISBOOT_TRACE(...) do { printf(__VA_ARGS__); } while (0)
 #ifdef MODDEBUG
 #define ISBOOT_MODTRACE(...) do { printf(__VA_ARGS__); } while (0)
 #else
 #define ISBOOT_MODTRACE(...)
 #endif
-#else /* !DEBUG */
-#define ISBOOT_TRACE(...)
-#define ISBOOT_MODTRACE(...)
-#endif /* DEBUG */
 
 char *
 isboot_get_boot_nic(void)
 {
-
 	if (strlen(isboot_boot_nic) == 0)
 		return (NULL);
 	return (isboot_boot_nic);
@@ -118,7 +121,6 @@ isboot_get_boot_nic(void)
 char *
 isboot_get_boot_device(void)
 {
-
 	if (strlen(isboot_boot_device) == 0)
 		return (NULL);
 	return (isboot_boot_device);
@@ -127,13 +129,12 @@ isboot_get_boot_device(void)
 int
 isboot_is_v4addr(uint8_t *addr)
 {
-	uint32_t n0, n1, n2, n3;
+	uint32_t n0, n1, n2;
 
 	/* RFC2373 2.5.4 */
 	n0 = be32toh(*(uint32_t *)(addr + 0));
 	n1 = be32toh(*(uint32_t *)(addr + 4));
 	n2 = be32toh(*(uint32_t *)(addr + 8));
-	n3 = be32toh(*(uint32_t *)(addr +12));
 	if (n0 == 0 && n1 == 0 && n2 == 0x0000ffffU)
 		return (1);	/* IPv4-mapped IPv6 */
 	else
@@ -157,23 +158,46 @@ isboot_is_zero_v4addr(uint8_t *addr)
 }
 
 /* find interface by MAC address */
-static struct ifaddr *
-isboot_get_ifa_by_mac(uint8_t *lladdr)
+#if __FreeBSD_version >= 1400094
+static u_int
+get_ifp_lladr_cb(void *lladdr, struct sockaddr_dl *sdl, u_int count)
 {
-	struct ifnet *ifp;
+	if (count > 0)
+		return 0;
+	if (memcmp((uint8_t *)lladdr, LLADDR(sdl), ETHER_ADDR_LEN) == 0)
+		return 1;
+	return 0;
+}
+
+static if_t
+#else
+static struct ifnet *
+#endif
+isboot_get_ifp_by_mac(uint8_t *lladdr)
+{
+#if __FreeBSD_version >= 1400094
+	if_t ifp;
+	struct if_iter iter;
+	u_int count;
+#else
 	struct ifaddr *ifa;
+	struct ifnet *ifp;
+#endif
 
 	if (lladdr == NULL)
 		return (NULL);
 
+#if __FreeBSD_version >= 1400094
+	for (ifp = if_iter_start(&iter); ifp != NULL; ifp = if_iter_next(&iter)) {
+		count = if_foreach_lladdr(ifp, get_ifp_lladr_cb, lladdr);
+		if (count > 0)
+			break;
+	}
+	if_iter_finish(&iter);
+#else
 	IFNET_RLOCK();
-#if __FreeBSD_version >= 1200064
 	CK_STAILQ_FOREACH(ifp, &V_ifnet, if_link)
 		CK_STAILQ_FOREACH(ifa, &ifp->if_addrhead, ifa_link) {
-#else
-	TAILQ_FOREACH(ifp, &V_ifnet, if_link)
-		TAILQ_FOREACH(ifa, &ifp->if_addrhead, ifa_link) {
-#endif
 			if (ifa->ifa_addr->sa_family != AF_LINK)
 				continue;
 			if (memcmp(lladdr,
@@ -181,15 +205,20 @@ isboot_get_ifa_by_mac(uint8_t *lladdr)
 				ETHER_ADDR_LEN) == 0)
 				goto done;
 		}
-	ifa = NULL;
+	ifp = NULL;
 done:
 	IFNET_RUNLOCK();
-	return (ifa);
+#endif
+	return (ifp);
 }
 
 /* remove all address and set new IPv4 address/mask to specified interface */
 static int
+#if __FreeBSD_version >= 1400094
+isboot_set_v4addr(if_t ifp, struct sockaddr_in *addr, int prefix)
+#else
 isboot_set_v4addr(struct ifnet *ifp, struct sockaddr_in *addr, int prefix)
+#endif
 {
 	struct ifreq ifr;
 	struct ifaliasreq ifra, ifra2;
@@ -255,7 +284,11 @@ isboot_set_v4addr(struct ifnet *ifp, struct sockaddr_in *addr, int prefix)
 
 /* remove all address and set new IPv6 address/mask to specified interface */
 static int
+#if __FreeBSD_version >= 1400094
+isboot_set_v6addr(if_t ifp, struct sockaddr_in6 *addr, int prefix)
+#else
 isboot_set_v6addr(struct ifnet *ifp, struct sockaddr_in6 *addr, int prefix)
+#endif
 {
 	struct ifreq ifr;
 	struct in6_aliasreq ifra, ifra2;
@@ -463,7 +496,11 @@ isboot_set_v6gw(struct sockaddr_in6 *gateway)
 }
 
 static int
+#if __FreeBSD_version >= 1400094
+isboot_ifup(if_t ifp)
+#else
 isboot_ifup(struct ifnet *ifp)
+#endif
 {
 	struct socket *so;
 	struct ifreq ifr;
@@ -479,7 +516,11 @@ isboot_ifup(struct ifnet *ifp)
 	}
 
 	/* boot NIC */
+#if __FreeBSD_version >= 1400094
+	strlcpy(ifr.ifr_name, if_name(ifp), sizeof(ifr.ifr_name));
+#else
 	strlcpy(ifr.ifr_name, ifp->if_xname, sizeof(ifr.ifr_name));
+#endif
 
 	/* set IFF_UP */
 	error = ifioctl(so, SIOCGIFFLAGS, (caddr_t)&ifr, td);
@@ -509,8 +550,11 @@ isboot_init(void)
 	struct ibft_initiator *ini;
 	struct ibft_nic *nic0;
 	struct ibft_target *tgt0;
-	struct ifaddr *ifa;
+#if __FreeBSD_version >= 1400094
+	if_t ifp;
+#else
 	struct ifnet *ifp;
+#endif
 	uint8_t *ibft;
 	int name_length, name_offset;
 	int prefix;
@@ -526,11 +570,14 @@ isboot_init(void)
 		return (ENXIO);
 
 	/* find booted NIC from MAC address */
-	ifa = isboot_get_ifa_by_mac(nic0->mac);
-	if (ifa == NULL)
+	ifp = isboot_get_ifp_by_mac(nic0->mac);
+	if (ifp == NULL)
 		return (ESRCH);
-	ifp = ifa->ifa_ifp;
+#if __FreeBSD_version >= 1400094
+	printf("Boot NIC: %s\n", if_name(ifp));
+#else
 	printf("Boot NIC: %s\n", ifp->if_xname);
+#endif
 
 	/* interface UP */
 	error = isboot_ifup(ifp);
@@ -665,7 +712,14 @@ isboot_init(void)
 	SYSCTL_ADD_STRING(&isboot_clist, SYSCTL_CHILDREN(oidp),
 	    OID_AUTO, "device", CTLFLAG_RD, isboot_boot_device, 0,
 	    "iSCSI boot driver device");
+	SYSCTL_ADD_UINT(&isboot_clist, SYSCTL_CHILDREN(oidp),
+	    OID_AUTO, "debug", CTLFLAG_RDTUN, &isboot_trace_level, 0,
+	    "Show iSCSI boot driver debug (trace) messages");
+#if __FreeBSD_version >= 1400094
+	strlcpy(isboot_boot_nic, if_name(ifp),
+#else
 	strlcpy(isboot_boot_nic, ifp->if_xname,
+#endif
 	    sizeof(isboot_boot_nic));
 	strlcpy(isboot_boot_device, "",
 	    sizeof(isboot_boot_device));
@@ -676,14 +730,12 @@ isboot_init(void)
 static void
 isboot_destroy(void)
 {
-
 	sysctl_ctx_free(&isboot_clist);
 }
 
 static void
 isboot_version(void)
 {
-
 	printf("iSCSI boot driver version %s\n", isboot_driver_version);
 }
 
@@ -697,6 +749,8 @@ isboot_handler(module_t mod, int what, void *arg)
 	case MOD_LOAD:
 		ISBOOT_MODTRACE("Load isboot\n");
 		isboot_version();
+		if (bootverbose)
+			isboot_ibft_verbose = 1;
 		(void)ibft_init();
 		if (ibft_get_signature() != NULL) {
 			err = isboot_init();
@@ -760,4 +814,5 @@ MODULE_VERSION(isboot, 1);
 MODULE_DEPEND(isboot, ether, 1, 1, 1);
 MODULE_DEPEND(isboot, icl, 1, 1, 1);
 MODULE_DEPEND(isboot, cam, 1, 1, 1);
-DECLARE_MODULE(isboot, mod_data, SI_SUB_PROTO_END, SI_ORDER_ANY);
+/* Delay loading as long as possible to ensure NIC drivers and their dependencies have loaded first */
+DECLARE_MODULE(isboot, mod_data, SI_SUB_ROOT_CONF-1, SI_ORDER_ANY);

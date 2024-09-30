@@ -1,6 +1,6 @@
 /*-
- * Copyright (C) 2010-2011 Daisuke Aoyama <aoyama@peach.ne.jp>
- * All rights reserved.
+ * Copyright (c) 2010-2011 Daisuke Aoyama <aoyama@peach.ne.jp>
+ * Copyright (c) 2021-2023 John Nielsen <john@jnielsen.net>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -41,6 +41,10 @@ __FBSDID("$FreeBSD$");
 #include "opt_acpi.h"
 #include "ibft.h"
 
+/* tunables from isboot.c */
+extern u_int isboot_ibft_acpi_table;
+extern u_int isboot_ibft_verbose;
+
 /* location of iBFT */
 uint8_t *ibft_signature = NULL;
 
@@ -51,24 +55,15 @@ int ibft_target0_offset = 0;
 int ibft_nic1_offset = 0;
 int ibft_target1_offset = 0;
 
-/* flags */
-#ifdef IBFT_VERBOSE
-int ibft_verbose = 1;
-#else
-int ibft_verbose = 0;
-#endif
-
 uint8_t *
 ibft_get_signature(void)
 {
-
 	return (ibft_signature);
 }
 
 uint8_t *
 ibft_get_nic0_mac(void)
 {
-
 	if (ibft_signature == NULL)
 		return (NULL);
 	if (ibft_nic0_offset == 0)
@@ -79,7 +74,6 @@ ibft_get_nic0_mac(void)
 struct ibft_initiator *
 ibft_get_initiator(void)
 {
-
 	if (ibft_signature == NULL)
 		return (NULL);
 	return (struct ibft_initiator *)(ibft_signature +
@@ -89,7 +83,6 @@ ibft_get_initiator(void)
 struct ibft_nic *
 ibft_get_nic0(void)
 {
-
 	if (ibft_signature == NULL)
 		return (NULL);
 	if (ibft_nic0_offset == 0)
@@ -100,7 +93,6 @@ ibft_get_nic0(void)
 struct ibft_target *
 ibft_get_target0(void)
 {
-
 	if (ibft_signature == NULL)
 		return (NULL);
 	if (ibft_target0_offset == 0)
@@ -111,7 +103,6 @@ ibft_get_target0(void)
 struct ibft_nic *
 ibft_get_nic1(void)
 {
-
 	if (ibft_signature == NULL)
 		return (NULL);
 	if (ibft_nic1_offset == 0)
@@ -122,7 +113,6 @@ ibft_get_nic1(void)
 struct ibft_target *
 ibft_get_target1(void)
 {
-
 	if (ibft_signature == NULL)
 		return (NULL);
 	if (ibft_target1_offset == 0)
@@ -148,13 +138,12 @@ ibft_is_zero_address(uint8_t *addr)
 void
 ibft_print_address(uint8_t *addr)
 {
-	uint32_t n0, n1, n2, n3;
+	uint32_t n0, n1, n2;
 
 	/* RFC2373 2.5.4 */
 	n0 = be32toh(*(uint32_t *)(addr + 0));
 	n1 = be32toh(*(uint32_t *)(addr + 4));
 	n2 = be32toh(*(uint32_t *)(addr + 8));
-	n3 = be32toh(*(uint32_t *)(addr +12));
 	if (n0 == 0 && n1 == 0 && n2 == 0x0000ffffU) {
 		/* IPv4-mapped IPv6 */
 		printf("%d.%d.%d.%d",
@@ -175,7 +164,6 @@ ibft_print_address(uint8_t *addr)
 void
 ibft_print_mac(uint8_t *addr)
 {
-
 	printf("%02x:%02x:%02x:%02x:%02x:%02x",
 	    addr[0], addr[1], addr[2], addr[3], addr[4], addr[5]);
 }
@@ -190,7 +178,7 @@ ibft_parse_structure(uint8_t *ibft)
 	struct ibft_nic *n0h, *n1h;
 	struct ibft_target *t0h, *t1h;
 	char oemid[6+1], oemtableid[8+1];
-	int id, version, length, index, flags;
+	int id, length, index, flags;
 	int revision, checksum;
 	int name_length, name_offset;
 	int sum, i;
@@ -204,7 +192,7 @@ ibft_parse_structure(uint8_t *ibft)
 	oemid[6] = '\0';
 	memcpy(oemtableid, th->oemtableid, 8);
 	oemtableid[8] = '\0';
-	if (ibft_verbose) {
+	if (isboot_ibft_verbose) {
 		printf("iBFT: length=%d, revision=%d, checksum=0x%x\n",
 		    length, revision, checksum);
 		printf("iBFT: oemid='%s', oemtableid='%s'\n",
@@ -217,7 +205,7 @@ ibft_parse_structure(uint8_t *ibft)
 		sum += *((uint8_t *)ibft + i);
 	}
 	sum &= 0xffU;
-	if (ibft_verbose) {
+	if (isboot_ibft_verbose) {
 		printf("iBFT: sum = 0x%x\n", sum);
 	}
 	if (sum != 0) {
@@ -228,7 +216,6 @@ ibft_parse_structure(uint8_t *ibft)
 	/* Control Structure (18 bytes or more) */
 	ch = (struct ibft_control *)(ibft + 48);
 	id = ch->id;
-	version = ch->version;
 	length = le16toh(ch->length);
 	index = ch->index;
 	flags = ch->flags;
@@ -246,7 +233,7 @@ ibft_parse_structure(uint8_t *ibft)
 	if (length > 18) {
 		/* XXX optional */
 	}
-	if (ibft_verbose) {
+	if (isboot_ibft_verbose) {
 		printf("iBFT: CS: length=%d, index=%d, flags=0x%x\n",
 		    length, index, flags);
 		printf("iBFT: CS: initiator=%d, nic0=%d, target0=%d, "
@@ -260,7 +247,6 @@ ibft_parse_structure(uint8_t *ibft)
 	if (ibft_initiator_offset != 0) {
 		ih = (struct ibft_initiator *)(ibft + ibft_initiator_offset);
 		id = ih->id;
-		version = ih->version;
 		length = le16toh(ih->length);
 		index = ih->index;
 		flags = ih->flags;
@@ -269,11 +255,11 @@ ibft_parse_structure(uint8_t *ibft)
 			    id);
 			return (-1);
 		}
-		if (ibft_verbose) {
+		if (isboot_ibft_verbose) {
 			printf("iBFT: IS: length=%d, index=%d, flags=0x%x\n",
 			    length, index, flags);
 		}
-		if (ibft_verbose) {
+		if (isboot_ibft_verbose) {
 			if (!ibft_is_zero_address(ih->isns)) {
 				printf("iSNS Server:\n");
 				ibft_print_address(ih->isns);
@@ -309,7 +295,6 @@ ibft_parse_structure(uint8_t *ibft)
 	if (ibft_nic0_offset != 0) {
 		n0h = (struct ibft_nic *)(ibft + ibft_nic0_offset);
 		id = n0h->id;
-		version = n0h->version;
 		length = le16toh(n0h->length);
 		index = n0h->index;
 		flags = n0h->flags;
@@ -317,7 +302,7 @@ ibft_parse_structure(uint8_t *ibft)
 			printf("iBFT: NIC0 Structure error (id=%d)\n", id);
 			return (-1);
 		}
-		if (ibft_verbose) {
+		if (isboot_ibft_verbose) {
 			printf("iBFT: NIC0: length=%d, index=%d, "
 			    "flags=0x%x\n",
 			    length, index, flags);
@@ -331,7 +316,7 @@ ibft_parse_structure(uint8_t *ibft)
 		printf("Prefix: ");
 		printf("%d\n", n0h->mask_prefix);
 
-		if (ibft_verbose) {
+		if (isboot_ibft_verbose) {
 			printf("NIC0: ");
 			printf("Origin: ");
 			printf("%d\n", n0h->origin);
@@ -344,7 +329,7 @@ ibft_parse_structure(uint8_t *ibft)
 			printf("\n");
 		}
 
-		if (ibft_verbose) {
+		if (isboot_ibft_verbose) {
 			if (!ibft_is_zero_address(n0h->pri_dns)) {
 				printf("NIC0: ");
 				printf("Primary DNS: ");
@@ -374,7 +359,7 @@ ibft_parse_structure(uint8_t *ibft)
 		ibft_print_mac(n0h->mac);
 		printf("\n");
 
-		if (ibft_verbose) {
+		if (isboot_ibft_verbose) {
 			printf("NIC0: ");
 			printf("PCI Bus/Dev/Func: ");
 			printf("%x (%x/%x/%x)\n",
@@ -398,7 +383,6 @@ ibft_parse_structure(uint8_t *ibft)
 	if (ibft_target0_offset != 0) {
 		t0h = (struct ibft_target *)(ibft + ibft_target0_offset);
 		id = t0h->id;
-		version = t0h->version;
 		length = le16toh(t0h->length);
 		index = t0h->index;
 		flags = t0h->flags;
@@ -406,7 +390,7 @@ ibft_parse_structure(uint8_t *ibft)
 			printf("iBFT: Target0 Structure error (id=%d)\n", id);
 			return (-1);
 		}
-		if (ibft_verbose) {
+		if (isboot_ibft_verbose) {
 			printf("iBFT: TGT0: length=%d, index=%d, "
 			    "flags=0x%x\n",
 			    length, index, flags);
@@ -423,7 +407,7 @@ ibft_parse_structure(uint8_t *ibft)
 		printf("Target LUN: ");
 		printf("%jx\n", (uintmax_t)le64toh(t0h->lun));
 
-		if (ibft_verbose) {
+		if (isboot_ibft_verbose) {
 			printf("TGT0: ");
 			printf("CHAP type: ");
 			printf("%d\n", t0h->chap_type);
@@ -441,7 +425,7 @@ ibft_parse_structure(uint8_t *ibft)
 			printf("%.*s\n", name_length, (ibft + name_offset));
 		}
 
-		if (ibft_verbose) {
+		if (isboot_ibft_verbose) {
 			name_length = t0h->chap_name_length;
 			name_offset = t0h->chap_name_offset;
 			if (name_offset != 0) {
@@ -482,7 +466,6 @@ ibft_parse_structure(uint8_t *ibft)
 	if (ibft_nic1_offset != 0) {
 		n1h = (struct ibft_nic *)(ibft + ibft_nic1_offset);
 		id = n1h->id;
-		version = n1h->version;
 		length = le16toh(n1h->length);
 		index = n1h->index;
 		flags = n1h->flags;
@@ -490,7 +473,7 @@ ibft_parse_structure(uint8_t *ibft)
 			printf("iBFT: NIC1 Structure error (id=%d)\n", id);
 			return (-1);
 		}
-		if (ibft_verbose) {
+		if (isboot_ibft_verbose) {
 			printf("iBFT: NIC1: length=%d, index=%d, "
 			    "flags=0x%x\n",
 			    length, index, flags);
@@ -501,7 +484,6 @@ ibft_parse_structure(uint8_t *ibft)
 	if (ibft_target1_offset != 0) {
 		t1h = (struct ibft_target *)(ibft + ibft_target1_offset);
 		id = t1h->id;
-		version = t1h->version;
 		length = le16toh(t1h->length);
 		index = t1h->index;
 		flags = t1h->flags;
@@ -509,7 +491,7 @@ ibft_parse_structure(uint8_t *ibft)
 			printf("iBFT: Target1 Structure error (id=%d)\n", id);
 			return (-1);
 		}
-		if (ibft_verbose) {
+		if (isboot_ibft_verbose) {
 			printf("iBFT: TGT1: length=%d, index=%d, "
 			    "flags=0x%x\n",
 			    length, index, flags);
@@ -545,9 +527,9 @@ ibft_acpi_lookup(void)
 	/*ACPI_IBFT_HEADER *ibft_hdr, *end;*/
 	ACPI_STATUS status;
 
-	status = AcpiGetTable(ACPI_SIG_IBFT, 1, (ACPI_TABLE_HEADER **)&ibft);
+	status = AcpiGetTable(ACPI_SIG_IBFT, isboot_ibft_acpi_table, (ACPI_TABLE_HEADER **)&ibft);
 	if (ACPI_FAILURE(status)) {
-		status = AcpiGetTable(IBFT_SIGNATURE, 1, (ACPI_TABLE_HEADER **)&ibft);
+		status = AcpiGetTable(IBFT_SIGNATURE, isboot_ibft_acpi_table, (ACPI_TABLE_HEADER **)&ibft);
 		if (ACPI_FAILURE(status))
 			return (NULL);
 	}
@@ -562,7 +544,7 @@ ibft_init(void)
 	uint32_t paddr;
 	p = ibft_acpi_lookup();
 	if (p != NULL) {
-		if (ibft_verbose) {
+		if (isboot_ibft_verbose) {
 			printf("found iBFT via ACPI\n");
 		}
 		need_unmap = 0;
@@ -574,12 +556,12 @@ ibft_init(void)
 		p = ibft_search_signature(vaddr, IBFT_HIGH_ADDR);
 		if (p != NULL) {
 			paddr = (uint32_t)(uintptr_t)(p - vaddr);
-			if (ibft_verbose) {
+			if (isboot_ibft_verbose) {
 				printf("found iBFT via lowmem at 0x%x\n", paddr);
 			}
 		}
 		else {
-			if (ibft_verbose) {
+			if (isboot_ibft_verbose) {
 				printf("iBFT not found\n");
 			}
 		}
@@ -588,11 +570,15 @@ ibft_init(void)
 		/* retrieve offsets */
 		error = ibft_parse_structure(p);
 		if (error) {
-			if (ibft_verbose) {
+			if (isboot_ibft_verbose) {
 				printf("iBFT error\n");
 			}
 			if (need_unmap == 1) {
+#if __FreeBSD_version >= 1400070
+				pmap_unmapdev(vaddr,
+#else
 				pmap_unmapdev((vm_offset_t)vaddr,
+#endif
 					(vm_size_t)IBFT_HIGH_ADDR);
 			}
 			return (error);

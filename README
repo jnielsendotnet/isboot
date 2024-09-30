@@ -1,9 +1,17 @@
 The iSCSI boot driver for FreeBSD
 
-This driver provides iSCSI boot feature to FreeBSD.
-It can be used with the bootable initiator such as the Intel NICs and iPXE/gPXE.
-It connects with the iSCSI target specified by iBFT automatically.
-Therefore, a diskless machine is also simply possible.
+This driver provides an iSCSI boot feature for FreeBSD. It can be used with a
+bootable initiator offered by many server BIOSes, NIC firmwares or iPXE/gPXE.
+It connects to the iSCSI target specified in the iSCSI Boot Firmware Table
+(iBFT) automatically, making it simple to run a diskless machine.
+
+Your boot firmware will create and populate the iBFT, connect to the specified
+iSCSI target and attempt to boot from the target volume (like any other
+supported disk). Any normal bootloader (such as FreeBSD's gptboot) can be used.
+The bootloader should load the kernel and modules (including isboot) and begin
+execution. During boot, the isboot driver configures the NIC and creates a new
+connection to the iSCSI target. The disk is then available to the operating
+system as normal, and can be used to mount the root volume.
 
 Installation:
 
@@ -23,43 +31,55 @@ Installation:
 Note:
 If you want use isboot with VIMAGE kernel, add CFLAGS+= -DVIMAGE to Makefile.
 The boot device may change after installation.
-It may be necessary to edit /etc/fstab in single mode.
-IP address and gateway are reflected in the boot device.
-You can see the boot device information by sysctl(8).
+It may be necessary to edit /etc/fstab in single-user mode.
 
-The following is an example with FreeBSD 10.0 and iPXE.
+The iBFT code supports two loader tunables:
+    hw.ibft.acpi_table: Defaults to 1. If you have multiple iSCSI boot
+        firmwares you may need to set this to a different value (such as 2).
+    hw.ibft.verbose: Defaults to 0. Set it to 1 to enable verbose iBFT logs.
+
+Similarly, there is a loader tunable for isboot debug output:
+    net.isboot.debug: Defaults to 0. Set it to 1 for high-level messages, 2 for
+    all informational messages and 3 for full trace output.
+
+After boot you can see the boot device information via sysctl(8).
+
+For example:
 
     # sysctl net.isboot
-    net.isboot.version: 0.2.7
-    net.isboot.nic: em0
-    net.isboot.device: da1
+    net.isboot.device: da5
+    net.isboot.nic: cxl0
+    net.isboot.version: 0.2.15
 
     # sysctl hw.ibft
-    hw.ibft.initiator_name: iqn.2010-04.org.ipxe:dn2800mt
-    hw.ibft.initiator_address: 172.18.0.139
-    hw.ibft.target_name: iqn.2007-09.jp.ne.peach:aria:dn2800mt-boot
-    hw.ibft.target_address: 172.18.0.26
-    hw.ibft.target_port: 3260
+    hw.ibft.verbose: 1
+    hw.ibft.acpi_table: 1
+    hw.ibft.nic_gateway: 0.0.0.0
+    hw.ibft.nic_prefix: 24
     hw.ibft.target_lun: 0
-    hw.ibft.nic_prefix: 16
-    hw.ibft.nic_gateway: 172.18.0.1
+    hw.ibft.target_port: 3260
+    hw.ibft.target_address: 192.168.104.10
+    hw.ibft.target_name: iqn.2002-05.net.jnielsen:max-iscsi
+    hw.ibft.initiator_address: 192.168.104.9
+    hw.ibft.initiator_name: iqn.2020-06.com.chelsio.boot:0007432FFBD0
 
-    # camcontrol inquiry da1
-    pass1: <FreeBSD iSCSI DISK 0001> Fixed Direct Access SCSI-5 device
-    pass1: Serial Number 10002800
-    pass1: 300.000MB/s transfers
+    # camcontrol inquiry da5
+    pass8: <JNC iSCSI 0001> Fixed Direct Access SPC-5 SCSI device
+    pass8: Serial Number 42
+    pass8: 300.000MB/s transfers
 
-Tested targets and initiators:
- o istgt-20121123 (XigmaNAS bundled version: https://www.xigmanas.com/)
- o iPXE/USB with Intel DN2800MT. (old test at blog: http://shell.peach.ne.jp/aoyama/archives/2100)
+Supported OS versions:
+ o FreeBSD 12.4
+ o FreeBSD 13.2
+ o FreeBSD 14.x
 
-Tested OS versions:
- o FreeBSD 12.2
- o FreeBSD 13.0
+Project website:
+https://github.com/jnielsendotnet/isboot
 
-For more information, go to Japanese blog at:
-http://shell.peach.ne.jp/aoyama/
+The original author's blog (in Japanese) had some additional information:
+https://web.archive.org/web/20160810012908/http://shell.peach.ne.jp/aoyama/
 
 Authors:
 Daisuke Aoyama <aoyama@peach.ne.jp>
 Michael Zoon <zoon01@xigmanas.com>
+John Nielsen <john@jnielsen.net>
