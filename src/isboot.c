@@ -509,6 +509,24 @@ isboot_ifup(struct ifnet *ifp)
 }
 
 static int
+#if __FreeBSD_version >= 1400094
+isboot_wait_link(if_t ifp)
+#else
+isboot_wait_link(struct ifnet *ifp)
+#endif
+{
+	int retry = 32;
+	printf("ISBOOT: Waiting up to %d seconds for link to be ready...\n", retry);
+	if (!(ifp->if_capabilities & IFCAP_LINKSTATE)) {
+		return 0;
+	}
+	while (retry-- >=0 && ifp->if_link_state != LINK_STATE_UP) {
+		tsleep(&isboot_iscsi_running, PWAIT, "isboot", 1 * hz);
+	}
+	return (ifp->if_link_state == LINK_STATE_UP);
+}
+
+static int
 isboot_init(void)
 {
 	struct sockaddr_storage sa;
@@ -606,6 +624,7 @@ isboot_init(void)
 	}
 
 	/* TODO: DNS, etc */
+	error = isboot_wait_link(ifp);
 
 	/* prepare values for iSCSI */
 	name_length = ini->name_length;
@@ -686,11 +705,10 @@ isboot_init(void)
 	    OID_AUTO, "debug", CTLFLAG_RDTUN, &isboot_trace_level, 0,
 	    "Show iSCSI boot driver debug (trace) messages");
 #if __FreeBSD_version >= 1400094
-	strlcpy(isboot_boot_nic, if_name(ifp),
+	strlcpy(isboot_boot_nic, if_name(ifp), sizeof(isboot_boot_nic));
 #else
-	strlcpy(isboot_boot_nic, ifp->if_xname,
+	strlcpy(isboot_boot_nic, ifp->if_xname, sizeof(isboot_boot_nic));
 #endif
-	    sizeof(isboot_boot_nic));
 	strlcpy(isboot_boot_device, "",
 	    sizeof(isboot_boot_device));
 
