@@ -33,6 +33,22 @@ If you want use isboot with VIMAGE kernel, add CFLAGS+= -DVIMAGE to Makefile.
 The boot device may change after installation.
 It may be necessary to edit /etc/fstab in single-user mode.
 
+The isboot module depends on iscsi.ko, which will be loaded automatically if
+available. Alternatively, you may add "device iscsi" to your kernel config.
+
+Ensure that any in-kernel firewall will permit the necessary iSCSI traffic.
+For ipfw, it may be helpful to set:
+  net.inet.ip.fw.default_to_accept="1"
+in /boot/loader.conf. Then ensure that traffic between your host and the iSCSI
+target is permitted on TCP port 3260 before adding any "deny" rules.
+
+Reconfiguring the boot NIC can interrupt the active iSCSI session. To prevent
+this, consider using the "isbootifname" script in the contrib directory which
+will rename your boot NIC to "bootnet0".
+  install -o root -g wheel -m 555 contrib/isbootifname /etc/rc.d/isbootifname
+Then add a line similar to this to your /etc/rc.conf:
+  ifconfig_bootnet0="NOAUTO"
+
 The iBFT code supports two loader tunables:
     hw.ibft.acpi_table: Defaults to 1. If you have multiple iSCSI boot
         firmwares you may need to set this to a different value (such as 2).
@@ -40,7 +56,7 @@ The iBFT code supports two loader tunables:
 
 Similarly, there is a loader tunable for isboot debug output:
     net.isboot.debug: Defaults to 0. Set it to 1 for high-level messages, 2 for
-    all informational messages and 3 for full trace output.
+    all informational messages and 3 for full trace output (EXTREMELY verbose)
 
 After boot you can see the boot device information via sysctl(8).
 
