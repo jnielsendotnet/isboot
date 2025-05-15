@@ -85,9 +85,9 @@ For example:
     pass8: 300.000MB/s transfers
 
 Supported OS versions:
- o FreeBSD 12.4
  o FreeBSD 13.2
  o FreeBSD 14.x
+ o FreeBSD 15.x
 
 Project website:
 https://github.com/jnielsendotnet/isboot
