@@ -67,6 +67,5 @@ uint32_t isboot_update_crc32c(const uint8_t *buf, size_t len, uint32_t crc);
 uint32_t isboot_fixup_crc32c(size_t total, uint32_t crc);
 uint32_t isboot_crc32c(const uint8_t *buf, size_t len);
 uint32_t isboot_iovec_crc32c(const struct iovec *iovp, int iovc, uint32_t offset, uint32_t len);
-void isboot_dump(const char *label, const uint8_t *buf, size_t len);
 
 #endif /* ISBOOT_H */

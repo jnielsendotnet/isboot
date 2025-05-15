@@ -198,6 +198,7 @@ extern u_int isboot_trace_level;
 #define ISBOOT_LVL_INFO 2
 #define ISBOOT_LVL_DEBUG 3
 #define ISBOOT_TRACE(lvl, ...) do { if(isboot_trace_level >= lvl) printf(__VA_ARGS__); } while (0)
+#define ISBOOT_PRINT(...) do { printf("isboot0: "); printf(__VA_ARGS__); } while (0)
 
 #ifdef ISBOOT_OPT_PREFERRED_HEADER_DIGEST
 static char *isboot_opt_hd = "CRC32C,None";
@@ -745,61 +746,6 @@ isboot_iovec_crc32c(const struct iovec *iovp, int iovc, uint32_t offset, uint32_
 	crc32c = crc32c ^ isboot_crc32c_xor;
 	return (crc32c);
 }
-
-void
-isboot_dump(const char *label, const uint8_t *buf, size_t len)
-{
-	char tmpbuf[1024];
-	char buf8[8+1];
-	int total;
-	int i;
-
-	printf("%s\n", label);
-
-	memset(buf8, 0, sizeof(buf8));
-	total = 0;
-	for (i = 0; i < len; i++) {
-		if (i != 0 && i % 8 == 0) {
-			total += snprintf(tmpbuf + total,
-			    sizeof(tmpbuf) - total, "%s", buf8);
-			printf("%s\n", tmpbuf);
-			total = 0;
-		}
-		total += snprintf(tmpbuf + total, sizeof(tmpbuf) - total,
-		    "%02x ", buf[i] & 0xff);
-		buf8[i % 8] = isprint(buf[i]) ? buf[i] : '.';
-	}
-	for ( ; i % 8 != 0; i++) {
-		total += snprintf(tmpbuf + total, sizeof(tmpbuf) - total,
-		    "   ");
-		buf8[i % 8] = ' ';
-	}
-	total += snprintf(tmpbuf + total, sizeof(tmpbuf) - total, "%s", buf8);
-	printf("%s\n", tmpbuf);
-}
-
-#if 0
-/* not used */
-static int
-isboot_islun2lun(uint64_t islun)
-{
-	uint64_t fmt_lun;
-	uint64_t method;
-	int lun_i;
-
-	fmt_lun = islun;
-	method = (fmt_lun >> 62) & 0x03U;
-	fmt_lun = fmt_lun >> 48;
-	if (method == 0x00U) {
-		lun_i = (int)(fmt_lun & 0x00ffU);
-	} else if (method == 0x01U) {
-		lun_i = (int)(fmt_lun & 0x3fffU);
-	} else {
-		lun_i = 0xffffU;
-	}
-	return (lun_i);
-}
-#endif
 
 static uint64_t
 isboot_lun2islun(int lun, int maxlun)
@@ -3385,7 +3331,7 @@ isboot_mainloop(void *arg)
 				}
 
 				/* session is restarted */
-				printf("iSCSI session is restarted\n");
+				ISBOOT_PRINT("iSCSI session is restarted\n");
 				error = 0;
 				break;
 			}
@@ -3468,7 +3414,7 @@ isboot_iscsi_start(void)
 	ISBOOT_TRACE(ISBOOT_LVL_INFO, "kproc_start\n");
 	kproc_start(&kproc);
 
-	printf("Attempting to login to iSCSI target and scan all LUNs.\n");
+	ISBOOT_TRACE(ISBOOT_LVL_WARN, "Attempting to login to iSCSI target and scan all LUNs.\n");
 	/* wait 60 sec. for periph */
 	retry = 60;
 	while (sess->cam_rescan_done == 0) {
@@ -3487,7 +3433,7 @@ isboot_iscsi_start(void)
 		} else {
 			if (strlen(isboot_boot_device) != 0) {
 				/* the boot device from iBFT is here */
-				printf("Boot device: %s\n",
+				ISBOOT_TRACE(ISBOOT_LVL_WARN, "Boot device: %s\n",
 				    isboot_boot_device);
 			}
 			sess->cam_device_installed = 1;
@@ -3523,7 +3469,7 @@ isboot_iscsi_device_init(void *arg)
 		} else {
 			if (strlen(isboot_boot_device) != 0) {
 				/* the boot device from iBFT is here */
-				printf("Boot device: %s\n",
+				ISBOOT_TRACE(ISBOOT_LVL_WARN, "Boot device: %s\n",
 				    isboot_boot_device);
 			}
 			sess->cam_device_installed = 1;

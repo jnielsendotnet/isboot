@@ -109,6 +109,9 @@ TUNABLE_INT("net.isboot.debug", &isboot_trace_level);
 #define ISBOOT_MODTRACE(...)
 #endif
 
+#define ISBOOT_PRINT(...) do { printf("isboot0: "); printf(__VA_ARGS__); } while (0)
+#define ISBOOT_PRINT_VERBOSE(...) do { if(isboot_trace_level > 0) { printf("isboot0: "); printf(__VA_ARGS__); }} while (0)
+
 char *
 isboot_get_boot_nic(void)
 {
@@ -258,7 +261,7 @@ isboot_set_v4addr(struct ifnet *ifp, struct sockaddr_in *addr, int prefix)
 		if (error == EADDRNOTAVAIL)
 			break;
 		if (error) {
-			printf("in_control error\n");
+			ISBOOT_PRINT("in_control error\n");
 			return (error);
 		}
 		osin = (struct sockaddr_in *)&ifr.ifr_addr;
@@ -267,7 +270,7 @@ isboot_set_v4addr(struct ifnet *ifp, struct sockaddr_in *addr, int prefix)
 		error = in_control(NULL, SIOCDIFADDR, (caddr_t)&ifra2,
 		    ifp, td);
 		if (error) {
-			printf("in_control error\n");
+			ISBOOT_PRINT("in_control error\n");
 			return (error);
 		}
 	}
@@ -275,7 +278,7 @@ isboot_set_v4addr(struct ifnet *ifp, struct sockaddr_in *addr, int prefix)
 	/* set new address/mask */
 	error = in_control(NULL, SIOCAIFADDR, (caddr_t)&ifra, ifp, td);
 	if (error) {
-		printf("in_control error\n");
+		ISBOOT_PRINT("in_control error\n");
 		return (error);
 	}
 	return (0);
@@ -338,7 +341,7 @@ isboot_set_v6addr(struct ifnet *ifp, struct sockaddr_in6 *addr, int prefix)
 		if (error == EADDRNOTAVAIL)
 			break;
 		if (error) {
-			printf("in6_control error\n");
+			ISBOOT_PRINT("in6_control error\n");
 			return (error);
 		}
 		osin6 = (struct sockaddr_in6 *)&ifr.ifr_addr;
@@ -347,7 +350,7 @@ isboot_set_v6addr(struct ifnet *ifp, struct sockaddr_in6 *addr, int prefix)
 		error = in6_control(NULL, SIOCDIFADDR, (caddr_t)&ifra2,
 		    ifp, td);
 		if (error) {
-			printf("in6_control error\n");
+			ISBOOT_PRINT("in6_control error\n");
 			return (error);
 		}
 	}
@@ -355,7 +358,7 @@ isboot_set_v6addr(struct ifnet *ifp, struct sockaddr_in6 *addr, int prefix)
 	/* set new address/mask */
 	error = in6_control(NULL, SIOCAIFADDR_IN6, (caddr_t)&ifra, ifp, td);
 	if (error) {
-		printf("in6_control error\n");
+		ISBOOT_PRINT("in6_control error\n");
 		return (error);
 	}
 	return (0);
@@ -394,7 +397,7 @@ isboot_set_v4gw(struct sockaddr_in *gateway)
 	error = rib_action(RT_DEFAULT_FIB, RTM_DELETE, &info, &rc);
 	if (error) {
 		if (error != ESRCH) {
-			printf("rtrequest RTM_DELETE error %d\n",
+			ISBOOT_PRINT("rtrequest RTM_DELETE error %d\n",
 			    error);
 			return (error);
 		}
@@ -408,7 +411,7 @@ isboot_set_v4gw(struct sockaddr_in *gateway)
 	info.rti_info[RTAX_GATEWAY] = (struct sockaddr *)gateway;
 	error = rib_action(RT_DEFAULT_FIB, RTM_ADD, &info, &rc);
 	if (error) {
-		printf("rtrequest RTM_ADD error %d\n", error);
+		ISBOOT_PRINT("rtrequest RTM_ADD error %d\n", error);
 		return (error);
 	}
 	return (0);
@@ -446,7 +449,7 @@ isboot_set_v6gw(struct sockaddr_in6 *gateway)
 	error = rib_action(RT_DEFAULT_FIB, RTM_DELETE, &info, &rc);
 	if (error) {
 		if (error != ESRCH) {
-			printf("rtrequest RTM_DELETE error %d\n",
+			ISBOOT_PRINT("rtrequest RTM_DELETE error %d\n",
 			    error);
 			return (error);
 		}
@@ -460,7 +463,7 @@ isboot_set_v6gw(struct sockaddr_in6 *gateway)
 	info.rti_info[RTAX_GATEWAY] = (struct sockaddr *)gateway;
 	error = rib_action(RT_DEFAULT_FIB, RTM_ADD, &info, &rc);
 	if (error) {
-		printf("rtrequest RTM_ADD error %d\n", error);
+		ISBOOT_PRINT("rtrequest RTM_ADD error %d\n", error);
 		return (error);
 	}
 	return (0);
@@ -482,7 +485,7 @@ isboot_ifup(struct ifnet *ifp)
 	td = curthread;
 	error = socreate(AF_INET, &so, SOCK_DGRAM, 0, td->td_ucred, td);
 	if (error) {
-		printf("%s: socreate, error=%d\n", __func__, error);
+		ISBOOT_PRINT("%s: socreate, error=%d\n", __func__, error);
 		return (error);
 	}
 
@@ -496,13 +499,13 @@ isboot_ifup(struct ifnet *ifp)
 	/* set IFF_UP */
 	error = ifioctl(so, SIOCGIFFLAGS, (caddr_t)&ifr, td);
 	if (error) {
-		printf("ifioctl SIOCGIFFLAGS\n");
+		ISBOOT_PRINT("ifioctl SIOCGIFFLAGS\n");
 		return (error);
 	}
 	ifr.ifr_flags |= IFF_UP;
 	error = ifioctl(so, SIOCSIFFLAGS, (caddr_t)&ifr, td);
 	if (error) {
-		printf("ifioctl SIOCSIFFLAGS\n");
+		ISBOOT_PRINT("ifioctl SIOCSIFFLAGS\n");
 		return (error);
 	}
 
@@ -517,7 +520,7 @@ isboot_wait_link(struct ifnet *ifp)
 #endif
 {
 	int retry = 32;
-	printf("ISBOOT: Waiting up to %d seconds for link to be ready...\n", retry);
+	ISBOOT_PRINT_VERBOSE("Waiting up to %d seconds for link to be ready...\n", retry);
 	if (!(ifp->if_capabilities & IFCAP_LINKSTATE)) {
 		return 0;
 	}
@@ -563,21 +566,21 @@ isboot_init(void)
 	if (ifp == NULL)
 		return (ESRCH);
 #if __FreeBSD_version >= 1400094
-	printf("Boot NIC: %s\n", if_name(ifp));
+	ISBOOT_PRINT("boot NIC: %s\n", if_name(ifp));
 #else
-	printf("Boot NIC: %s\n", ifp->if_xname);
+	ISBOOT_PRINT("boot NIC: %s\n", ifp->if_xname);
 #endif
 
 	/* interface UP */
 	error = isboot_ifup(ifp);
 	if (error) {
-		printf("ifup error\n");
+		ISBOOT_PRINT("ifup error\n");
 		return (error);
 	}
 
 	/* set IP in iBFT to the NIC */
 	if (isboot_is_v4addr(tgt0->ip) && isboot_is_v4addr(nic0->ip)) {
-		printf("Configure IPv4 by %s%d\n", "NIC", nic0->index);
+		ISBOOT_PRINT("configuring NIC%d for IPv4\n", nic0->index);
 		addr4 = (struct sockaddr_in *)&sa;
 		memset(addr4, 0, sizeof(*addr4));
 		addr4->sin_len = sizeof(*addr4);
@@ -586,7 +589,7 @@ isboot_init(void)
 		prefix = nic0->mask_prefix;
 		error = isboot_set_v4addr(ifp, addr4, prefix);
 	} else {
-		printf("Configure IPv6 by %s%d\n", "NIC", nic0->index);
+		ISBOOT_PRINT("configuring NIC%d for IPv6\n", nic0->index);
 		addr6 = (struct sockaddr_in6 *)&sa;
 		memset(addr6, 0, sizeof(*addr6));
 		addr6->sin6_len = sizeof(*addr6);
@@ -596,7 +599,7 @@ isboot_init(void)
 		error = isboot_set_v6addr(ifp, addr6, prefix);
 	}
 	if (error) {
-		printf("IP set error\n");
+		ISBOOT_PRINT("error configuring IP parameters\n");
 		return (error);
 	}
 
@@ -619,7 +622,7 @@ isboot_init(void)
 			error = isboot_set_v6gw(gw6);
 		}
 		if (error) {
-			printf("Gateway set error\n");
+			ISBOOT_PRINT("error setting gateway\n");
 			return (error);
 		}
 	}
@@ -663,9 +666,9 @@ isboot_init(void)
 		    "%.*s", name_length, (ibft + name_offset));
 
 		if (isboot_chap_type == 1) {
-			printf("CHAP Type: CHAP\n");
+			ISBOOT_PRINT("CHAP Type: CHAP\n");
 		} else if (isboot_chap_type == 2) {
-			printf("CHAP Type: Mutual CHAP\n");
+			ISBOOT_PRINT("CHAP Type: Mutual CHAP\n");
 
 			name_length = tgt0->rev_chap_name_length;
 			name_offset = tgt0->rev_chap_name_offset;
@@ -679,9 +682,7 @@ isboot_init(void)
 			    "%.*s", name_length, (ibft + name_offset));
 		}
 	} else {
-		if (bootverbose) {
-			printf("CHAP Type: No CHAP\n");
-		}
+		ISBOOT_PRINT_VERBOSE("CHAP Type: No CHAP\n");
 	}
 
 	isboot_nic_prefix = nic0->mask_prefix;
@@ -725,7 +726,7 @@ isboot_destroy(void)
 static void
 isboot_version(void)
 {
-	printf("iSCSI boot driver version %s\n", isboot_driver_version);
+	ISBOOT_PRINT("iSCSI boot driver version %s\n", isboot_driver_version);
 }
 
 static int
@@ -740,13 +741,14 @@ isboot_handler(module_t mod, int what, void *arg)
 		isboot_version();
 		if (bootverbose)
 			isboot_ibft_verbose = 1;
+			isboot_trace_level = 2;
 		(void)ibft_init();
 		if (ibft_get_signature() != NULL) {
 			err = isboot_init();
 			if (err == 0) {
 				err = isboot_iscsi_start();
 				if (err) {
-					printf("can't start iSCSI session\n");
+					ISBOOT_PRINT("can't start iSCSI session\n");
 				}
 			}
 		}
