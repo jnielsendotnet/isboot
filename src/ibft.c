@@ -55,6 +55,9 @@ int ibft_target0_offset = 0;
 int ibft_nic1_offset = 0;
 int ibft_target1_offset = 0;
 
+#define IBFT_PRINT(...) do { printf("isboot0: iBFT: "); printf(__VA_ARGS__); } while (0)
+#define IBFT_PRINT_VERBOSE(...) do { if(isboot_ibft_verbose > 0) { printf("isboot0: iBFT: "); printf(__VA_ARGS__); }} while (0)
+
 uint8_t *
 ibft_get_signature(void)
 {
@@ -192,12 +195,8 @@ ibft_parse_structure(uint8_t *ibft)
 	oemid[6] = '\0';
 	memcpy(oemtableid, th->oemtableid, 8);
 	oemtableid[8] = '\0';
-	if (isboot_ibft_verbose) {
-		printf("iBFT: length=%d, revision=%d, checksum=0x%x\n",
-		    length, revision, checksum);
-		printf("iBFT: oemid='%s', oemtableid='%s'\n",
-		    oemid, oemtableid);
-	}
+	IBFT_PRINT_VERBOSE("length=%d, revision=%d, checksum=0x%x\n", length, revision, checksum);
+	IBFT_PRINT_VERBOSE("oemid='%s', oemtableid='%s'\n", oemid, oemtableid);
 
 	/* verify checksum of iBFT */
 	sum = 0;
@@ -205,11 +204,9 @@ ibft_parse_structure(uint8_t *ibft)
 		sum += *((uint8_t *)ibft + i);
 	}
 	sum &= 0xffU;
-	if (isboot_ibft_verbose) {
-		printf("iBFT: sum = 0x%x\n", sum);
-	}
+	IBFT_PRINT_VERBOSE("sum = 0x%x\n", sum);
 	if (sum != 0) {
-		printf("iBFT: checksum error sum=0x%x\n", sum);
+		IBFT_PRINT("checksum error sum=0x%x\n", sum);
 		return (-1);
 	}
 
@@ -220,7 +217,7 @@ ibft_parse_structure(uint8_t *ibft)
 	index = ch->index;
 	flags = ch->flags;
 	if (id != IBFT_ID_CONTROL) {
-		printf("iBFT: Control Structure error (id=%d)\n", id);
+		IBFT_PRINT("Control Structure error (id=%d)\n", id);
 		return (-1);
 	}
 
@@ -233,15 +230,10 @@ ibft_parse_structure(uint8_t *ibft)
 	if (length > 18) {
 		/* XXX optional */
 	}
-	if (isboot_ibft_verbose) {
-		printf("iBFT: CS: length=%d, index=%d, flags=0x%x\n",
-		    length, index, flags);
-		printf("iBFT: CS: initiator=%d, nic0=%d, target0=%d, "
-		    "nic1=%d, target1=%d\n",
-		    ibft_initiator_offset,
-		    ibft_nic0_offset, ibft_target0_offset,
-		    ibft_nic1_offset, ibft_target1_offset);
-	}
+	IBFT_PRINT_VERBOSE("CS: length=%d, index=%d, flags=0x%x\n", length, index, flags);
+	IBFT_PRINT_VERBOSE("CS: initiator=%d, nic0=%d, target0=%d, nic1=%d, target1=%d\n",
+		ibft_initiator_offset, ibft_nic0_offset, ibft_target0_offset,
+		ibft_nic1_offset, ibft_target1_offset);
 
 	/* Initiator Structure */
 	if (ibft_initiator_offset != 0) {
@@ -251,32 +243,28 @@ ibft_parse_structure(uint8_t *ibft)
 		index = ih->index;
 		flags = ih->flags;
 		if (id != IBFT_ID_INITIATOR) {
-			printf("iBFT: Initiator Structure error (id=%d)\n",
-			    id);
+			IBFT_PRINT("Initiator Structure error (id=%d)\n", id);
 			return (-1);
 		}
-		if (isboot_ibft_verbose) {
-			printf("iBFT: IS: length=%d, index=%d, flags=0x%x\n",
-			    length, index, flags);
-		}
+		IBFT_PRINT_VERBOSE("IS: length=%d, index=%d, flags=0x%x\n", length, index, flags);
 		if (isboot_ibft_verbose) {
 			if (!ibft_is_zero_address(ih->isns)) {
-				printf("iSNS Server:\n");
+				IBFT_PRINT_VERBOSE("iSNS Server: ");
 				ibft_print_address(ih->isns);
 				printf("\n");
 			}
 			if (!ibft_is_zero_address(ih->slp)) {
-				printf("SLP Server:\n");
+				IBFT_PRINT_VERBOSE("SLP Server: ");
 				ibft_print_address(ih->slp);
 				printf("\n");
 			}
 			if (!ibft_is_zero_address(ih->pri_radius)) {
-				printf("Primary Radius Server:\n");
+				IBFT_PRINT_VERBOSE("Primary Radius Server: ");
 				ibft_print_address(ih->pri_radius);
 				printf("\n");
 			}
 			if (!ibft_is_zero_address(ih->sec_radius)) {
-				printf("Secondary Radius Server:\n");
+				IBFT_PRINT_VERBOSE("Secondary Radius Server: ");
 				ibft_print_address(ih->sec_radius);
 				printf("\n");
 			}
@@ -285,9 +273,7 @@ ibft_parse_structure(uint8_t *ibft)
 		name_length = ih->name_length;
 		name_offset = ih->name_offset;
 		if (name_offset != 0) {
-			printf("IS: ");
-			printf("Initiator name: ");
-			printf("%.*s\n", name_length, (ibft + name_offset));
+			IBFT_PRINT("Initiator name: %.*s\n", name_length, (ibft + name_offset));
 		}
 	}
 
@@ -299,83 +285,56 @@ ibft_parse_structure(uint8_t *ibft)
 		index = n0h->index;
 		flags = n0h->flags;
 		if (id != IBFT_ID_NIC) {
-			printf("iBFT: NIC0 Structure error (id=%d)\n", id);
+			IBFT_PRINT("NIC0 Structure error (id=%d)\n", id);
 			return (-1);
 		}
-		if (isboot_ibft_verbose) {
-			printf("iBFT: NIC0: length=%d, index=%d, "
-			    "flags=0x%x\n",
-			    length, index, flags);
-		}
-
-		printf("NIC0: ");
-		printf("IP address: ");
+		IBFT_PRINT_VERBOSE("NIC0: length=%d, index=%d, flags=0x%x\n", length, index, flags);
+		IBFT_PRINT("NIC0: IP: ");
 		ibft_print_address(n0h->ip);
-		printf("\n");
-		printf("NIC0: ");
-		printf("Prefix: ");
-		printf("%d\n", n0h->mask_prefix);
-
+		printf("/%d", n0h->mask_prefix);
 		if (isboot_ibft_verbose) {
-			printf("NIC0: ");
-			printf("Origin: ");
-			printf("%d\n", n0h->origin);
+			printf("(origin %d)", n0h->origin);
 		}
-
+		printf("\n");
 		if (!ibft_is_zero_address(n0h->gateway)) {
-			printf("NIC0: ");
-			printf("Gateway: ");
+			IBFT_PRINT("NIC0: Gateway: ");
 			ibft_print_address(n0h->gateway);
 			printf("\n");
 		}
 
 		if (isboot_ibft_verbose) {
 			if (!ibft_is_zero_address(n0h->pri_dns)) {
-				printf("NIC0: ");
-				printf("Primary DNS: ");
+				IBFT_PRINT_VERBOSE("NIC0: Primary DNS: ");
 				ibft_print_address(n0h->pri_dns);
 				printf("\n");
 			}
 			if (!ibft_is_zero_address(n0h->sec_dns)) {
-				printf("NIC0: ");
-				printf("Secondary DNS: ");
+				IBFT_PRINT_VERBOSE("NIC0: Secondary DNS: ");
 				ibft_print_address(n0h->sec_dns);
 				printf("\n");
 			}
 			if (!ibft_is_zero_address(n0h->dhcp)) {
-				printf("NIC0: ");
-				printf("DHCP: ");
+				IBFT_PRINT_VERBOSE("NIC0: DHCP Server: ");
 				ibft_print_address(n0h->dhcp);
 				printf("\n");
 			}
-
-			printf("NIC0: ");
-			printf("VLAN: ");
-			printf("%d\n", le16toh(n0h->vlan));
+			IBFT_PRINT("NIC0: VLAN: %d\n", le16toh(n0h->vlan));
 		}
 
-		printf("NIC0: ");
-		printf("MAC address: ");
+		IBFT_PRINT("NIC0: MAC address: ");
 		ibft_print_mac(n0h->mac);
 		printf("\n");
 
-		if (isboot_ibft_verbose) {
-			printf("NIC0: ");
-			printf("PCI Bus/Dev/Func: ");
-			printf("%x (%x/%x/%x)\n",
-			    le16toh(n0h->pci_bus_dev_func),
-			    (le16toh(n0h->pci_bus_dev_func) >> 8) & 0x00ffU,
-			    (le16toh(n0h->pci_bus_dev_func) >> 3) & 0x001fU,
-			    (le16toh(n0h->pci_bus_dev_func) & 0x0003U));
-		}
+		IBFT_PRINT_VERBOSE("NIC0: PCI Bus/Dev/Func: %x (%x/%x/%x)\n",
+			le16toh(n0h->pci_bus_dev_func),
+			(le16toh(n0h->pci_bus_dev_func) >> 8) & 0x00ffU,
+			(le16toh(n0h->pci_bus_dev_func) >> 3) & 0x001fU,
+			(le16toh(n0h->pci_bus_dev_func) & 0x0003U));
 
 		name_length = n0h->host_name_length;
 		name_offset = n0h->host_name_offset;
 		if (name_offset != 0) {
-			printf("NIC0: ");
-			printf("Host name: ");
-			printf("%.*s\n", name_length, (ibft + name_offset));
-			printf("\n");
+			IBFT_PRINT("NIC0: Hostname: %.*s\n", name_length, (ibft + name_offset));
 		}
 	}
 
@@ -387,78 +346,42 @@ ibft_parse_structure(uint8_t *ibft)
 		index = t0h->index;
 		flags = t0h->flags;
 		if (id != IBFT_ID_TARGET) {
-			printf("iBFT: Target0 Structure error (id=%d)\n", id);
+			IBFT_PRINT("Target0 Structure error (id=%d)\n", id);
 			return (-1);
 		}
-		if (isboot_ibft_verbose) {
-			printf("iBFT: TGT0: length=%d, index=%d, "
-			    "flags=0x%x\n",
-			    length, index, flags);
-		}
+		IBFT_PRINT_VERBOSE("TGT0: length=%d, index=%d, flags=0x%x\n", length, index, flags);
 
-		printf("TGT0: ");
-		printf("Target IP address: ");
+		IBFT_PRINT("TGT0: IP ");
 		ibft_print_address(t0h->ip);
-		printf("\n");
-		printf("TGT0: ");
-		printf("Target Port: ");
-		printf("%d\n", le16toh(t0h->port));
-		printf("TGT0: ");
-		printf("Target LUN: ");
-		printf("%jx\n", (uintmax_t)le64toh(t0h->lun));
-
-		if (isboot_ibft_verbose) {
-			printf("TGT0: ");
-			printf("CHAP type: ");
-			printf("%d\n", t0h->chap_type);
-
-			printf("TGT0: ");
-			printf("NIC index: ");
-			printf("%d\n", t0h->nic_index);
-		}
+		printf(", Port %d, LUN %jx\n", le16toh(t0h->port), (uintmax_t)le64toh(t0h->lun));
+		IBFT_PRINT_VERBOSE("TGT0: CHAP type: %d\n", t0h->chap_type);
+		IBFT_PRINT_VERBOSE("TGT0: NIC index: %d\n", t0h->nic_index);
 
 		name_length = t0h->name_length;
 		name_offset = t0h->name_offset;
 		if (name_offset != 0) {
-			printf("TGT0: ");
-			printf("Target name: ");
-			printf("%.*s\n", name_length, (ibft + name_offset));
+			IBFT_PRINT("TGT0: Name: %.*s\n", name_length, (ibft + name_offset));
 		}
 
-		if (isboot_ibft_verbose) {
-			name_length = t0h->chap_name_length;
-			name_offset = t0h->chap_name_offset;
-			if (name_offset != 0) {
-				printf("TGT0: ");
-				printf("CHAP name: ");
-				printf("%.*s\n", name_length,
-				    (ibft + name_offset));
-			}
-			name_length = t0h->chap_secret_length;
-			name_offset = t0h->chap_secret_offset;
-			if (name_offset != 0) {
-				printf("TGT0: ");
-				printf("CHAP secret: ");
-				printf("%.*s\n", name_length,
-				    (ibft + name_offset));
-			}
-
-			name_length = t0h->rev_chap_name_length;
-			name_offset = t0h->rev_chap_name_offset;
-			if (name_offset != 0) {
-				printf("TGT0: ");
-				printf("Reverse CHAP name: ");
-				printf("%.*s\n", name_length,
-				    (ibft + name_offset));
-			}
-			name_length = t0h->rev_chap_secret_length;
-			name_offset = t0h->rev_chap_secret_offset;
-			if (name_offset != 0) {
-				printf("TGT0: ");
-				printf("Reverse CHAP secret: ");
-				printf("%.*s\n", name_length,
-				    (ibft + name_offset));
-			}
+		name_length = t0h->chap_name_length;
+		name_offset = t0h->chap_name_offset;
+		if (name_offset != 0) {
+			IBFT_PRINT_VERBOSE("TGT0: CHAP name: %.*s\n", name_length, (ibft + name_offset));
+		}
+		name_length = t0h->chap_secret_length;
+		name_offset = t0h->chap_secret_offset;
+		if (name_offset != 0) {
+			IBFT_PRINT_VERBOSE("TGT0: CHAP secret: %.*s\n", name_length, (ibft + name_offset));
+		}
+		name_length = t0h->rev_chap_name_length;
+		name_offset = t0h->rev_chap_name_offset;
+		if (name_offset != 0) {
+			IBFT_PRINT_VERBOSE("TGT0: Reverse CHAP name: %.*s\n", name_length, (ibft + name_offset));
+		}
+		name_length = t0h->rev_chap_secret_length;
+		name_offset = t0h->rev_chap_secret_offset;
+		if (name_offset != 0) {
+			IBFT_PRINT_VERBOSE("TGT0: Reverse CHAP secret: %.*s\n", name_length, (ibft + name_offset));
 		}
 	}
 
@@ -470,14 +393,10 @@ ibft_parse_structure(uint8_t *ibft)
 		index = n1h->index;
 		flags = n1h->flags;
 		if (id != IBFT_ID_NIC) {
-			printf("iBFT: NIC1 Structure error (id=%d)\n", id);
+			IBFT_PRINT("NIC1 Structure error (id=%d)\n", id);
 			return (-1);
 		}
-		if (isboot_ibft_verbose) {
-			printf("iBFT: NIC1: length=%d, index=%d, "
-			    "flags=0x%x\n",
-			    length, index, flags);
-		}
+		IBFT_PRINT_VERBOSE("NIC1: length=%d, index=%d, flags=0x%x\n", length, index, flags);
 	}
 
 	/* Target1 Structure */
@@ -488,14 +407,10 @@ ibft_parse_structure(uint8_t *ibft)
 		index = t1h->index;
 		flags = t1h->flags;
 		if (id != IBFT_ID_TARGET) {
-			printf("iBFT: Target1 Structure error (id=%d)\n", id);
+			IBFT_PRINT("Target1 Structure error (id=%d)\n", id);
 			return (-1);
 		}
-		if (isboot_ibft_verbose) {
-			printf("iBFT: TGT1: length=%d, index=%d, "
-			    "flags=0x%x\n",
-			    length, index, flags);
-		}
+		IBFT_PRINT_VERBOSE("iBFT: TGT1: length=%d, index=%d, flags=0x%x\n", length, index, flags);
 	}
 	return (0);
 }
@@ -556,23 +471,17 @@ ibft_init(void)
 		p = ibft_search_signature(vaddr, IBFT_HIGH_ADDR);
 		if (p != NULL) {
 			paddr = (uint32_t)(uintptr_t)(p - vaddr);
-			if (isboot_ibft_verbose) {
-				printf("found iBFT via lowmem at 0x%x\n", paddr);
-			}
+			IBFT_PRINT_VERBOSE("found iBFT via lowmem at 0x%x\n", paddr);
 		}
 		else {
-			if (isboot_ibft_verbose) {
-				printf("iBFT not found\n");
-			}
+			IBFT_PRINT_VERBOSE("iBFT not found\n");
 		}
 	}
 	if (p != NULL) {
 		/* retrieve offsets */
 		error = ibft_parse_structure(p);
 		if (error) {
-			if (isboot_ibft_verbose) {
-				printf("iBFT error\n");
-			}
+			IBFT_PRINT_VERBOSE("iBFT error\n");
 			if (need_unmap == 1) {
 #if __FreeBSD_version >= 1400070
 				pmap_unmapdev(vaddr,
