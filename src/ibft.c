@@ -289,18 +289,19 @@ ibft_parse_structure(uint8_t *ibft)
 			return (-1);
 		}
 		IBFT_PRINT_VERBOSE("NIC0: length=%d, index=%d, flags=0x%x\n", length, index, flags);
-		IBFT_PRINT("NIC0: IP: ");
+		IBFT_PRINT("NIC0: MAC=");
+		ibft_print_mac(n0h->mac);
+		printf(", IP=");
 		ibft_print_address(n0h->ip);
 		printf("/%d", n0h->mask_prefix);
 		if (isboot_ibft_verbose) {
-			printf("(origin %d)", n0h->origin);
+			printf(" (origin %d)", n0h->origin);
+		}
+		if (!ibft_is_zero_address(n0h->gateway)) {
+			printf(", Gateway=");
+			ibft_print_address(n0h->gateway);
 		}
 		printf("\n");
-		if (!ibft_is_zero_address(n0h->gateway)) {
-			IBFT_PRINT("NIC0: Gateway: ");
-			ibft_print_address(n0h->gateway);
-			printf("\n");
-		}
 
 		if (isboot_ibft_verbose) {
 			if (!ibft_is_zero_address(n0h->pri_dns)) {
@@ -320,10 +321,6 @@ ibft_parse_structure(uint8_t *ibft)
 			}
 			IBFT_PRINT("NIC0: VLAN: %d\n", le16toh(n0h->vlan));
 		}
-
-		IBFT_PRINT("NIC0: MAC address: ");
-		ibft_print_mac(n0h->mac);
-		printf("\n");
 
 		IBFT_PRINT_VERBOSE("NIC0: PCI Bus/Dev/Func: %x (%x/%x/%x)\n",
 			le16toh(n0h->pci_bus_dev_func),
@@ -351,17 +348,17 @@ ibft_parse_structure(uint8_t *ibft)
 		}
 		IBFT_PRINT_VERBOSE("TGT0: length=%d, index=%d, flags=0x%x\n", length, index, flags);
 
-		IBFT_PRINT("TGT0: IP ");
+		IBFT_PRINT("TGT0: IP=");
 		ibft_print_address(t0h->ip);
-		printf(", Port %d, LUN %jx\n", le16toh(t0h->port), (uintmax_t)le64toh(t0h->lun));
-		IBFT_PRINT_VERBOSE("TGT0: CHAP type: %d\n", t0h->chap_type);
-		IBFT_PRINT_VERBOSE("TGT0: NIC index: %d\n", t0h->nic_index);
-
+		printf(", Port=%d, LUN=%jx", le16toh(t0h->port), (uintmax_t)le64toh(t0h->lun));
 		name_length = t0h->name_length;
 		name_offset = t0h->name_offset;
 		if (name_offset != 0) {
-			IBFT_PRINT("TGT0: Name: %.*s\n", name_length, (ibft + name_offset));
+			printf(", Name=%.*s", name_length, (ibft + name_offset));
 		}
+		printf("\n");
+		IBFT_PRINT_VERBOSE("TGT0: CHAP type: %d\n", t0h->chap_type);
+		IBFT_PRINT_VERBOSE("TGT0: NIC index: %d\n", t0h->nic_index);
 
 		name_length = t0h->chap_name_length;
 		name_offset = t0h->chap_name_offset;
@@ -459,9 +456,7 @@ ibft_init(void)
 	uint32_t paddr;
 	p = ibft_acpi_lookup();
 	if (p != NULL) {
-		if (isboot_ibft_verbose) {
-			printf("found iBFT via ACPI\n");
-		}
+		IBFT_PRINT_VERBOSE("found iBFT via ACPI (table %d)\n", isboot_ibft_acpi_table);
 		need_unmap = 0;
 	}
 	else {

@@ -2087,8 +2087,8 @@ isboot_action(struct cam_sim *sim, union ccb *ccb)
 	{
 		struct ccb_calc_geometry *ccg = &ccb->ccg;
 
-		ISBOOT_TRACE(ISBOOT_LVL_INFO, "XPT_CALC_GEOMETRY\n");
-		ISBOOT_TRACE(ISBOOT_LVL_INFO, "target=%d, lun=%d vsize=%d, bsize=%d\n",
+		ISBOOT_TRACE(ISBOOT_LVL_DEBUG, "XPT_CALC_GEOMETRY\n");
+		ISBOOT_TRACE(ISBOOT_LVL_DEBUG, "target=%d, lun=%d vsize=%d, bsize=%d\n",
 		    ccb->ccb_h.target_id, (int)ccb->ccb_h.target_lun,
 		    (int)ccg->volume_size, (int)ccg->block_size);
 		cam_calc_geometry(ccg, /*extended*/1);
