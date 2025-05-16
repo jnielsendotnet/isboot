@@ -520,11 +520,11 @@ isboot_wait_link(struct ifnet *ifp)
 #endif
 {
 	int retry = 32;
-	ISBOOT_PRINT_VERBOSE("Waiting up to %d seconds for link to be ready...\n", retry);
 	if (!(ifp->if_capabilities & IFCAP_LINKSTATE)) {
 		return 0;
 	}
 	while (retry-- >=0 && ifp->if_link_state != LINK_STATE_UP) {
+		if (retry == 29) ISBOOT_PRINT("Waiting for link to be ready...\n");
 		tsleep(&isboot_iscsi_running, PWAIT, "isboot", 1 * hz);
 	}
 	return (ifp->if_link_state == LINK_STATE_UP);
@@ -580,7 +580,7 @@ isboot_init(void)
 
 	/* set IP in iBFT to the NIC */
 	if (isboot_is_v4addr(tgt0->ip) && isboot_is_v4addr(nic0->ip)) {
-		ISBOOT_PRINT("configuring NIC%d for IPv4\n", nic0->index);
+		ISBOOT_PRINT("configuring NIC%d (IPv4)\n", nic0->index);
 		addr4 = (struct sockaddr_in *)&sa;
 		memset(addr4, 0, sizeof(*addr4));
 		addr4->sin_len = sizeof(*addr4);
@@ -589,7 +589,7 @@ isboot_init(void)
 		prefix = nic0->mask_prefix;
 		error = isboot_set_v4addr(ifp, addr4, prefix);
 	} else {
-		ISBOOT_PRINT("configuring NIC%d for IPv6\n", nic0->index);
+		ISBOOT_PRINT("configuring NIC%d (IPv6)\n", nic0->index);
 		addr6 = (struct sockaddr_in6 *)&sa;
 		memset(addr6, 0, sizeof(*addr6));
 		addr6->sin6_len = sizeof(*addr6);
@@ -739,9 +739,10 @@ isboot_handler(module_t mod, int what, void *arg)
 	case MOD_LOAD:
 		ISBOOT_MODTRACE("Load isboot\n");
 		isboot_version();
-		if (bootverbose)
+		if (bootverbose) {
 			isboot_ibft_verbose = 1;
 			isboot_trace_level = 2;
+		}
 		(void)ibft_init();
 		if (ibft_get_signature() != NULL) {
 			err = isboot_init();
