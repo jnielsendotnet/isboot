@@ -52,7 +52,7 @@ __FBSDID("$FreeBSD$");
 #include "ibft.h"
 #include "isboot.h"
 
-static char *isboot_driver_version = "0.2.16-alpha";
+static char *isboot_driver_version = "0.2.16-beta";
 
 /* boot iSCSI initiator and target */
 uint8_t isboot_initiator_name[ISBOOT_NAME_MAX];
