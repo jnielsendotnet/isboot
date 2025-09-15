@@ -506,9 +506,19 @@ isboot_ifup(struct ifnet *ifp)
 static int
 #if __FreeBSD_version >= 1400094
 isboot_wait_link(if_t ifp)
+{
+	int retry = 32;
+	if (!(if_getcapabilities(ifp) & IFCAP_LINKSTATE)) {
+		return 0;
+	}
+	while (retry-- >=0 && if_getlinkstate(ifp) != LINK_STATE_UP) {
+		if (retry == 29) ISBOOT_PRINT("Waiting for link to be ready...\n");
+		tsleep(&isboot_iscsi_running, PWAIT, "isboot", 1 * hz);
+	}
+	return (if_getlinkstate(ifp) == LINK_STATE_UP);
+}
 #else
 isboot_wait_link(struct ifnet *ifp)
-#endif
 {
 	int retry = 32;
 	if (!(ifp->if_capabilities & IFCAP_LINKSTATE)) {
@@ -520,6 +530,7 @@ isboot_wait_link(struct ifnet *ifp)
 	}
 	return (ifp->if_link_state == LINK_STATE_UP);
 }
+#endif
 
 static int
 isboot_init(void)
