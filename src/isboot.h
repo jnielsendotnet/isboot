@@ -56,7 +56,6 @@ extern uint8_t isboot_boot_nic[ISBOOT_SYSCTL_STR_MAX];
 extern uint8_t isboot_boot_device[ISBOOT_SYSCTL_STR_MAX];
 
 char *isboot_get_boot_nic(void);
-char *isboot_get_boot_device(void);
 int isboot_is_v4addr(uint8_t *addr);
 int isboot_is_zero_v4addr(uint8_t *addr);
 int isboot_iscsi_start(void);

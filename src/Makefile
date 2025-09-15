@@ -21,7 +21,6 @@ EXPORT_SYMS=	ibft_get_signature	\
 		ibft_get_target0	\
 		ibft_get_nic1		\
 		ibft_get_target1	\
-		isboot_get_boot_nic	\
-		isboot_get_boot_device
+		isboot_get_boot_nic
 
 .include <bsd.kmod.mk>

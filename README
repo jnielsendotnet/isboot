@@ -58,34 +58,34 @@ Similarly, there is a loader tunable for isboot debug output:
     net.isboot.debug: Defaults to 0. Set it to 1 for high-level messages, 2 for
     all informational messages and 3 for full trace output (EXTREMELY verbose)
 
-After boot you can see the boot device information via sysctl(8).
+After boot you can see the driver information via sysctl(8).
 
 For example:
 
     # sysctl net.isboot
-    net.isboot.device: da5
-    net.isboot.nic: cxl0
-    net.isboot.version: 0.2.15
+    net.isboot.debug: 0
+    net.isboot.nic: vtnet0
+    net.isboot.version: 0.2.16
 
     # sysctl hw.ibft
-    hw.ibft.verbose: 1
+    hw.ibft.verbose: 0
     hw.ibft.acpi_table: 1
-    hw.ibft.nic_gateway: 0.0.0.0
+    hw.ibft.nic_gateway: 192.168.2.1
     hw.ibft.nic_prefix: 24
     hw.ibft.target_lun: 0
     hw.ibft.target_port: 3260
-    hw.ibft.target_address: 192.168.104.10
-    hw.ibft.target_name: iqn.2002-05.net.jnielsen:max-iscsi
-    hw.ibft.initiator_address: 192.168.104.9
-    hw.ibft.initiator_name: iqn.2020-06.com.chelsio.boot:0007432FFBD0
+    hw.ibft.target_address: 192.168.2.10
+    hw.ibft.target_name: iqn.2002-05.net.jnielsen:isbootvol
+    hw.ibft.initiator_address: 192.168.2.13
+    hw.ibft.initiator_name: iqn.2010-04.org.ipxe:initiator-uuid
 
-    # camcontrol inquiry da5
-    pass8: <JNC iSCSI 0001> Fixed Direct Access SPC-5 SCSI device
-    pass8: Serial Number 42
-    pass8: 300.000MB/s transfers
+    # camcontrol inquiry da0
+    pass0: <JNC iSCSI 0001> Fixed Direct Access SPC-5 SCSI device
+    pass0: Serial Number 221b
+    pass0: 300.000MB/s transfers
 
 Supported OS versions:
- o FreeBSD 13.2
+ o FreeBSD 13.5
  o FreeBSD 14.x
  o FreeBSD 15.x
 

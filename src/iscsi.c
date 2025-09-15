@@ -1,6 +1,6 @@
 /*-
  * Copyright (c) 2010-2015 Daisuke Aoyama <aoyama@peach.ne.jp>
- * Copyright (c) 2021-2023 John Nielsen <john@jnielsen.net>
+ * Copyright (c) 2021-2025 John Nielsen <john@jnielsen.net>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -161,7 +161,7 @@ struct isboot_sess {
 	struct mtx cam_mtx;
 	int cam_rescan_done;
 	int cam_rescan_in_progress;
-	int cam_device_installed;
+	// int cam_device_installed;
 	int cam_qfreeze;
 
 	/* iscsi_initiator specific */
@@ -1658,74 +1658,6 @@ next_loginpdu:
 }
 
 static int
-isboot_cam_set_devices(struct isboot_sess *sess)
-{
-	struct cam_path *path;
-	union ccb ccb;
-	int target_id;
-	int lun, luns;
-	int i;
-
-	ISBOOT_TRACE(ISBOOT_LVL_INFO, "set devices on bus%d\n", cam_sim_path(sess->sim));
-	target_id = 0;
-	lun = sess->lun;
-	luns = 0;
-	mtx_lock(&sess->cam_mtx);
-	for (i = 0; i < ISBOOT_MAX_LUNS; i++) {
-		if (xpt_create_path(&path, xpt_periph,
-			cam_sim_path(sess->sim), target_id, i)
-		    != CAM_REQ_CMP) {
-			ISBOOT_ERROR("xpt create path error\n");
-			continue;
-		}
-		memset(&ccb, 0, sizeof(ccb));
-		xpt_setup_ccb(&ccb.ccb_h, path, CAM_PRIORITY_XPT);
-		ccb.ccb_h.func_code = XPT_GDEVLIST;
-		ccb.ccb_h.flags = CAM_DIR_NONE;
-		ccb.ccb_h.retry_count = 1;
-		ccb.cgdl.index = 0;
-		ccb.cgdl.status = CAM_GDEVLIST_MORE_DEVS;
-		while (ccb.cgdl.status == CAM_GDEVLIST_MORE_DEVS) {
-			xpt_action(&ccb);
-			if (ccb.ccb_h.status != CAM_REQ_CMP) {
-				continue;
-			}
-			luns++;
-			if (ccb.ccb_h.target_lun == lun) {
-				if (strcasecmp(ccb.cgdl.periph_name,
-					"da") == 0) {
-					snprintf(isboot_boot_device,
-					    sizeof(isboot_boot_device),
-					    "%s%d", ccb.cgdl.periph_name,
-					    ccb.cgdl.unit_number);
-				}
-			}
-			ISBOOT_TRACE(ISBOOT_LVL_INFO, "found device=%s%d@lun=%d\n",
-			    ccb.cgdl.periph_name,
-			    ccb.cgdl.unit_number,
-			    (int)ccb.ccb_h.target_lun);
-		}
-
-		memset(&ccb, 0, sizeof(ccb));
-		xpt_setup_ccb(&ccb.ccb_h, path, CAM_PRIORITY_NONE);
-		ccb.ccb_h.func_code = XPT_REL_SIMQ;
-		ccb.ccb_h.flags = CAM_DEV_QFREEZE;
-		ccb.crs.release_flags = RELSIM_ADJUST_OPENINGS;
-		if (sess->opt.tags > 1)
-			ccb.crs.openings = sess->opt.tags - 1;
-		else
-			ccb.crs.openings = 1;
-		xpt_action(&ccb);
-		if ((ccb.ccb_h.status & CAM_STATUS_MASK) != CAM_REQ_CMP) {
-			ISBOOT_TRACE(ISBOOT_LVL_DEBUG, "XPT error\n");
-		}
-		xpt_free_path(path);
-	}
-	mtx_unlock(&sess->cam_mtx);
-	return (luns);
-}
-
-static int
 isboot_scsi_io(struct cam_sim *sim, union ccb *ccb)
 {
 	struct isboot_sess *sess;
@@ -2117,7 +2049,6 @@ isboot_cam_rescan(struct isboot_sess *sess)
 		sess->cam_rescan_done = 0;
 		sess->cam_rescan_in_progress = 1;
 		xpt_action(ccb);
-		//xpt_path_unlock(ccb->ccb_h.path);
 		xpt_path_unlock(sess->path);
 		ccb = NULL;	/* free by callback */
 	}
@@ -2238,8 +2169,6 @@ isboot_initialize_session(struct isboot_sess *sess)
 
 	/* initialize parameters */
 	sess->so = NULL;
-	// NOT USE
-	//sess->sp = NULL;
 	sess->fd = -1;
 	sess->timeout = ISBOOT_SOCK_TIMEOUT;
 	sess->header_digest = 0;
@@ -2331,7 +2260,6 @@ isboot_initialize_session(struct isboot_sess *sess)
 	sess->path = NULL;
 	sess->cam_rescan_done = 0;
 	sess->cam_rescan_in_progress = 0;
-	sess->cam_device_installed = 0;
 	sess->cam_qfreeze = 0;
 
 	return (error);
@@ -3243,7 +3171,6 @@ isboot_iscsi_start(void)
 {
 	struct isboot_sess *sess = &isboot_g_sess;
 	struct kproc_desc kproc;
-	int error;
 	int retry;
 
 	ISBOOT_TRACE(ISBOOT_LVL_INFO, "isboot start, thread id=%x\n", curthread->td_tid);
@@ -3271,22 +3198,6 @@ isboot_iscsi_start(void)
 			break;
 		tsleep(&sess->cam_rescan_done, PRIBIO, "rescan", 1 * hz);
 	}
-	/* setup device after the rescan is completed */
-	if (sess->cam_rescan_done != 0 &&
-	    sess->cam_device_installed == 0) {
-		error = isboot_cam_set_devices(sess);
-		if (error == 0) {
-			ISBOOT_TRACE(ISBOOT_LVL_WARN, "no CAM device\n");
-		} else {
-			if (strlen(isboot_boot_device) != 0) {
-				/* the boot device from iBFT is here */
-				ISBOOT_TRACE(ISBOOT_LVL_WARN, "Boot device: %s\n",
-				    isboot_boot_device);
-			}
-			sess->cam_device_installed = 1;
-			wakeup(&sess->cam_device_installed);
-		}
-	}
 	return (0);
 }
 
@@ -3298,7 +3209,6 @@ static void
 isboot_iscsi_device_init(void *arg)
 {
 	struct isboot_sess *sess = &isboot_g_sess;
-	int error;
 
 	/* valid iBFT? */
 	if (ibft_get_signature() == NULL)
@@ -3306,21 +3216,4 @@ isboot_iscsi_device_init(void *arg)
 	/* socket is connected? */
 	if (sess->so == NULL)
 		return;
-
-	/* setup device after the rescan is completed */
-	if (sess->cam_rescan_done != 0 &&
-	    sess->cam_device_installed == 0) {
-		error = isboot_cam_set_devices(sess);
-		if (error == 0) {
-			ISBOOT_TRACE(ISBOOT_LVL_WARN, "no CAM device\n");
-		} else {
-			if (strlen(isboot_boot_device) != 0) {
-				/* the boot device from iBFT is here */
-				ISBOOT_TRACE(ISBOOT_LVL_WARN, "Boot device: %s\n",
-				    isboot_boot_device);
-			}
-			sess->cam_device_installed = 1;
-			wakeup(&sess->cam_device_installed);
-		}
-	}
 }

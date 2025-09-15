@@ -1,6 +1,6 @@
 /*-
  * Copyright (c) 2010-2015 Daisuke Aoyama <aoyama@peach.ne.jp>
- * Copyright (c) 2021-2023 John Nielsen <john@jnielsen.net>
+ * Copyright (c) 2021-2025 John Nielsen <john@jnielsen.net>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -99,7 +99,6 @@ SYSCTL_UINT(_hw_ibft, OID_AUTO, verbose, CTLFLAG_RDTUN, &isboot_ibft_verbose, 0,
 /* sysctl (isboot) */
 static struct sysctl_ctx_list isboot_clist;
 uint8_t isboot_boot_nic[ISBOOT_SYSCTL_STR_MAX];
-uint8_t isboot_boot_device[ISBOOT_SYSCTL_STR_MAX];
 u_int isboot_trace_level = 0;
 TUNABLE_INT("net.isboot.debug", &isboot_trace_level);
 
@@ -118,14 +117,6 @@ isboot_get_boot_nic(void)
 	if (strlen(isboot_boot_nic) == 0)
 		return (NULL);
 	return (isboot_boot_nic);
-}
-
-char *
-isboot_get_boot_device(void)
-{
-	if (strlen(isboot_boot_device) == 0)
-		return (NULL);
-	return (isboot_boot_device);
 }
 
 int
@@ -700,9 +691,6 @@ isboot_init(void)
 	SYSCTL_ADD_STRING(&isboot_clist, SYSCTL_CHILDREN(oidp),
 	    OID_AUTO, "nic", CTLFLAG_RD, isboot_boot_nic, 0,
 	    "iSCSI boot driver NIC");
-	SYSCTL_ADD_STRING(&isboot_clist, SYSCTL_CHILDREN(oidp),
-	    OID_AUTO, "device", CTLFLAG_RD, isboot_boot_device, 0,
-	    "iSCSI boot driver device");
 	SYSCTL_ADD_UINT(&isboot_clist, SYSCTL_CHILDREN(oidp),
 	    OID_AUTO, "debug", CTLFLAG_RDTUN, &isboot_trace_level, 0,
 	    "Show iSCSI boot driver debug (trace) messages");
@@ -711,8 +699,6 @@ isboot_init(void)
 #else
 	strlcpy(isboot_boot_nic, ifp->if_xname, sizeof(isboot_boot_nic));
 #endif
-	strlcpy(isboot_boot_device, "",
-	    sizeof(isboot_boot_device));
 
 	return (0);
 }
