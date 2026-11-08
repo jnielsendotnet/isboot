@@ -57,7 +57,12 @@ __FBSDID("$FreeBSD$");
 #include <sys/unistd.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
+#if __FreeBSD_version < 1403503 || \
+    (__FreeBSD_version >= 1500000 && __FreeBSD_version < 1500047)
 #include <machine/stdarg.h>
+#else
+#include <sys/stdarg.h>
+#endif
 #include <cam/cam.h>
 #include <cam/cam_ccb.h>
 #include <cam/cam_sim.h>
